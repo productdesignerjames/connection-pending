@@ -21,6 +21,54 @@ function request(method: string, url: string, body?: unknown): Request {
 }
 
 describe("temporary shared room", () => {
+  it("enforces complete unique cross-team rounds on the backend, including stale or forged plans", async () => {
+    const store = new MemoryRoomStore();
+    const created = await handleRoomRequest(
+      request("POST", "", { action: "create" }), store, 1_000,
+    );
+    const { code, hostSecret } = await created.json();
+    for (const [index, team] of ["A", "A", "B", "B"].entries()) {
+      await handleRoomRequest(request("POST", "", {
+        action: "join", code, displayName: `Person ${index}`, team,
+      }), store, 2_000);
+    }
+    const room = (await store.get(code))!;
+    const rounds = generateMeetupRounds(room.participants, 40, () => 0.37);
+    expect(rounds).toHaveLength(2);
+    const start = (submitted: unknown, secret = hostSecret) =>
+      handleRoomRequest(request("POST", "", {
+        action: "start", code, hostSecret: secret, rounds: submitted,
+        phase: "conversation", deadline: 180_000,
+      }), store, 3_000);
+    expect((await start(rounds, "wrong")).status).toBe(403);
+    const sameTeam = structuredClone(rounds);
+    sameTeam[0].stations.forEach((station, index) => {
+      const ids = room.participants.slice(index * 2, index * 2 + 2).map((person) => person.id);
+      station.participantIds = ids;
+      station.stayingId = ids[0];
+      station.movingIds = ids.slice(1);
+    });
+    for (const invalid of [
+      sameTeam,
+      [...rounds, { ...rounds[0], number: 3 }],
+      [{ ...rounds[0], stations: rounds[0].stations.slice(1) }],
+      [{ ...rounds[0], stations: null }],
+      [],
+    ]) expect((await start(invalid)).status).toBe(400);
+    const [first, second] = rounds[0].stations[0].participantIds.map(
+      (id) => room.participants.find((person) => person.id === id)!,
+    );
+    first.role = "Director of design";
+    second.role = "Lead designer";
+    await store.set(room);
+    expect((await start(rounds)).status).toBe(400);
+    delete first.role;
+    delete second.role;
+    await store.set(room);
+    expect((await start(rounds)).status).toBe(200);
+    expect((await start(rounds)).status).toBe(409);
+  });
+
   it("retains signup roles for phone and manually added participants", async () => {
     const store = new MemoryRoomStore();
     const created = await handleRoomRequest(
@@ -97,11 +145,7 @@ describe("temporary shared room", () => {
         action: "start",
         code,
         hostSecret,
-        rounds: generateRounds(
-          participants.map((participant) => participant.id),
-          1,
-          "trio",
-        ),
+        rounds: generateMeetupRounds(participants, 1),
         phase: "conversation",
         deadline: now + 180_000,
       }),
@@ -196,7 +240,9 @@ describe("temporary shared room", () => {
         action: "start",
         code,
         hostSecret,
-        rounds: generateRounds([firstId, secondId, thirdId], 1, "trio"),
+        rounds: generateMeetupRounds(
+          [firstId, secondId, thirdId].map((id) => ({ id })), 1,
+        ),
         phase: "conversation",
         deadline: now + 180_000,
       }),

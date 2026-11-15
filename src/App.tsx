@@ -35,6 +35,7 @@ import {
   DEFAULT_QUESTIONS,
   DEFAULT_TEAM,
   ORGANISER_NAME,
+  MAX_MEETUP_ROUNDS,
   avatarForName,
   calculateDurationSeconds,
   countConversations,
@@ -221,6 +222,13 @@ function App() {
   const signupRemaining = room
     ? Math.max(0, room.signupEndsAt - now)
     : ROOM_SIGNUP_MS;
+  const roomParticipants = room?.participants;
+  const roomRoundPlan = useMemo(
+    () => roomParticipants && roomParticipants.length >= MIN_ROOM_PARTICIPANTS
+      ? generateMeetupRounds(roomParticipants, MAX_MEETUP_ROUNDS)
+      : [],
+    [roomParticipants],
+  );
 
   useEffect(() => {
     let message = "";
@@ -244,7 +252,11 @@ function App() {
   const pollHostRoom = useEffectEvent(async () => {
     if (!roomCode || !hostSecret) return;
     try {
-      setRoom(await readHostRoom(roomCode, hostSecret));
+      const next = await readHostRoom(roomCode, hostSecret);
+      setRoom((current) => current &&
+        JSON.stringify(current.participants) === JSON.stringify(next.participants)
+        ? { ...next, participants: current.participants }
+        : next);
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Session link expired.",
@@ -541,11 +553,9 @@ function App() {
   function createPreviewRounds(
     nextOrder: string[],
     settings: SessionSettings = data.settings,
-    participants?: TeamMember[],
+    plannedRounds?: Round[],
   ): Round[] {
-    const rounds = participants
-      ? generateMeetupRounds(participants, settings.rounds)
-      : generateRounds(
+    const rounds = plannedRounds ?? generateRounds(
           nextOrder,
           settings.rounds,
           settings.oddAttendanceMode,
@@ -675,6 +685,12 @@ function App() {
       );
       return;
     }
+    if (!roomRoundPlan.length) {
+      setError(
+        "No complete cross-team round is possible with these teams and roles. Add people from other teams before starting.",
+      );
+      return;
+    }
     setError("");
     setRoomBusy(true);
     const participants: TeamMember[] = room.participants.map((participant) => {
@@ -693,7 +709,7 @@ function App() {
     });
     const settings = {
       ...data.settings,
-      rounds: Math.min(data.settings.rounds, participants.length - 1),
+      rounds: Math.min(data.settings.rounds, roomRoundPlan.length),
       oddAttendanceMode: "break" as const,
     };
     const sessionOrder = shuffle(
@@ -702,7 +718,7 @@ function App() {
     const sessionRounds = createPreviewRounds(
       sessionOrder,
       settings,
-      participants,
+      roomRoundPlan.slice(0, settings.rounds),
     );
     const active = startSession(
       sessionOrder,
@@ -870,7 +886,7 @@ function App() {
   function recover(resume: boolean) {
     if (!session || !resume) {
       setData((current) => ({ ...current, session: null }));
-      setScreen("setup");
+      setScreen("room-setup");
       return;
     }
     const recovered =
@@ -898,10 +914,9 @@ function App() {
             .filter((member) => member.isActive)
             .map((member) => member.id),
     }));
-    setScreen("setup");
-    setPanel("session");
+    setScreen("room-setup");
     setNotice(
-      "Session saved. You can update attendance or run another session.",
+      "Session saved. Set up a new QR session when you’re ready.",
     );
   }
   function resetApp() {
@@ -1144,7 +1159,7 @@ function App() {
           </span>
           <span className="brand-name">
             {APP_NAME}
-            <small>TEAM NETWORKING, REIMAGINED</small>
+            <small>A SIMPLE WAY TO NETWORK.</small>
           </span>
         </button>
         <div className="topbar-right">
@@ -1220,6 +1235,7 @@ function App() {
             signupRemaining={signupRemaining}
             busy={roomBusy}
             settings={data.settings}
+            roundLimit={roomRoundPlan.length}
             onMeetCountChange={(count) => updateSetting("rounds", count)}
             onStart={() => void startRoomSession()}
             onAddParticipant={addManualParticipant}
@@ -1980,32 +1996,30 @@ function App() {
             onStart={startSession}
           />
         )}
-        {screen === "recovery" && (
+        {screen === "recovery" && session && (
           <section className="recovery-screen">
-            <div className="recovery-art">
-              <div />
-              <span />
-              <span />
-              <span />
-              <span />
-              <Sparkles size={18} />
+            <div className="recovery-people" aria-hidden="true">
+              <BusinessPeopleArt pairIndex={0} />
             </div>
-            <p className="section-kicker">WELCOME BACK</p>
-            <h1>Your session is still here.</h1>
-            <p>
-              A saved session was found with {session?.attendeeIds.length ?? 0}{" "}
-              people. Resume it paused or start fresh.
-            </p>
-            <div className="button-row centered">
-              <button
-                className="secondary-button"
-                onClick={() => recover(false)}
-              >
-                Start fresh
-              </button>
-              <button className="primary-button" onClick={() => recover(true)}>
-                Recover session
-              </button>
+            <div className="recovery-copy">
+              <p className="section-kicker">WELCOME BACK</p>
+              <h1>Your session is saved.</h1>
+              <p className="recovery-summary">
+                {session.attendeeIds.length} people · Round{" "}
+                {session.currentRound + 1} of {session.rounds.length}
+              </p>
+              <p>Your timer will stay paused until you’re ready.</p>
+              <div className="button-row">
+                <button className="primary-button" onClick={() => recover(true)}>
+                  Return to session
+                </button>
+                <button
+                  className="secondary-button"
+                  onClick={() => recover(false)}
+                >
+                  Start fresh
+                </button>
+              </div>
             </div>
           </section>
         )}
@@ -2331,18 +2345,19 @@ function RoomSetupScreen({
 }) {
   return (
     <section className="room-setup-screen">
-      <button className="back-button" type="button" onClick={onBack}>
-        <ArrowLeft size={16} aria-hidden="true" /> Back
+      <button className="back-button character-back-button" type="button" onClick={onBack}>
+        <span aria-hidden="true"><BusinessPeopleArt pointingLeft /></span>
+        Back
       </button>
       <header className="room-setup-heading">
         <div>
           <p className="section-kicker">NEW SESSION</p>
           <h1>Session setup</h1>
         </div>
-        <BusinessPeopleArt single />
       </header>
       <div className="room-setup-layout">
         <section className="room-setup-fields" aria-label="Session timing">
+          <h2>Timing</h2>
           <div className="room-setup-field">
             <label htmlFor="room-talk-time">Length per meeting</label>
             <div className="setup-select-control">
@@ -2441,24 +2456,28 @@ function RoomSetupScreen({
             </fieldset>
           )}
         </section>
+        <aside className="room-setup-summary" aria-label="Session summary">
+          <h2>Your session</h2>
+          <div className="room-setup-total">
+            <span>LENGTH PER MEETING</span>
+            <strong>{settings.conversationMinutes} min</strong>
+            <small>{settings.movementSeconds} seconds finding time</small>
+            <div className="setup-character-stage" aria-hidden="true">
+              <BusinessPeopleArt single />
+            </div>
+          </div>
+          <p>Round limits are calculated from teams and roles once everyone joins.</p>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={onCreate}
+            disabled={busy}
+          >
+            {busy ? "Opening room…" : "Start session"}
+          </button>
+          <p className="room-setup-signup">3-minute QR signup window</p>
+        </aside>
       </div>
-      <footer className="room-setup-summary">
-        <div className="room-setup-total">
-          <span>LENGTH PER MEETING</span>
-          <strong>{settings.conversationMinutes} min</strong>
-          <small>
-            {settings.movementSeconds} seconds finding time · 3-minute QR signup
-          </small>
-        </div>
-        <button
-          className="primary-button"
-          type="button"
-          onClick={onCreate}
-          disabled={busy}
-        >
-          {busy ? "Opening room…" : "Start session"}
-        </button>
-      </footer>
     </section>
   );
 }
@@ -2468,16 +2487,9 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
     <section className="game-title-screen">
       <div className="game-title-copy">
         <div className="welcome-brand">
-          <img
-            src="/speed-meetings-logo.svg"
-            width={48}
-            height={48}
-            alt={`${APP_NAME} logo`}
-          />
-          <p className="game-overline">TEAM NETWORKING</p>
+          <p className="game-overline">A SIMPLE WAY TO NETWORK.</p>
         </div>
         <h1>{APP_NAME}</h1>
-        <BusinessPeopleArt />
         <p className="game-subtitle">
           Bring your team together for short, timed conversations. Join by QR,
           meet a new person each round, and make more connections.
@@ -2489,6 +2501,7 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
           <IntroMusicButton />
         </div>
       </div>
+      <BusinessPeopleArt />
     </section>
   );
 }
@@ -2499,6 +2512,7 @@ function RoomLobbyScreen({
   signupRemaining,
   busy,
   settings,
+  roundLimit,
   onMeetCountChange,
   onAddParticipant,
   onExtendSignup,
@@ -2510,6 +2524,7 @@ function RoomLobbyScreen({
   signupRemaining: number;
   busy: boolean;
   settings: SessionSettings;
+  roundLimit: number;
   onMeetCountChange: (count: number) => void;
   onAddParticipant: (displayName: string, team: string, role: string) => Promise<boolean>;
   onExtendSignup: () => void;
@@ -2520,13 +2535,7 @@ function RoomLobbyScreen({
   const [manualName, setManualName] = useState("");
   const [manualTeam, setManualTeam] = useState("");
   const [manualRole, setManualRole] = useState("");
-  const availablePeople = Math.min(
-    40,
-    room.participants.length >= MIN_ROOM_PARTICIPANTS
-      ? room.participants.length - 1
-      : 0,
-  );
-  const meetingCount = Math.min(settings.rounds, availablePeople);
+  const meetingCount = Math.min(settings.rounds, roundLimit);
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(joinUrl);
@@ -2540,105 +2549,57 @@ function RoomLobbyScreen({
     <section className="room-lobby-screen">
       <header className="clean-page-heading">
         <div>
-          <p className="section-kicker">TEMPORARY SESSION</p>
           <h1>Scan to join</h1>
-          <p>
-            Participants enter their own name. The room closes automatically
-            after the session.
-          </p>
+          <p>Open your phone camera and scan the code to check in.</p>
         </div>
         <button className="secondary-button" type="button" onClick={onClose}>
           Cancel session
         </button>
       </header>
-      <div className="room-meeting-plan">
-        <label htmlFor="room-round-count">People to meet per person</label>
-        <div className="stepper">
-          <button
-            type="button"
-            aria-label="Fewer people to meet"
-            disabled={busy || meetingCount <= 1}
-            onClick={() => onMeetCountChange(meetingCount - 1)}
-          >
-            −
-          </button>
-          <input
-            id="room-round-count"
-            type="number"
-            min="1"
-            max={availablePeople || 1}
-            value={meetingCount}
-            disabled={busy || !availablePeople}
-            aria-describedby="room-meeting-count-help"
-            onChange={(event) =>
-              onMeetCountChange(
-                clamp(Number(event.target.value), 1, availablePeople || 1),
-              )
-            }
-          />
-          <button
-            type="button"
-            aria-label="More people to meet"
-            disabled={busy || meetingCount >= availablePeople}
-            onClick={() => onMeetCountChange(meetingCount + 1)}
-          >
-            +
-          </button>
-        </div>
-        <small id="room-meeting-count-help">
-          {availablePeople
-            ? `Up to ${availablePeople} people available · ${formatDuration(calculateDurationSeconds({ ...settings, rounds: meetingCount }))} estimated`
-            : `Waiting for at least ${MIN_ROOM_PARTICIPANTS} people`}
-        </small>
-      </div>
       <div className="room-lobby-layout">
         <section className="room-qr-panel">
-          <div className="qr-frame">
-            <QRCodeSVG value={joinUrl} size={230} level="M" includeMargin />
-          </div>
           <p className="section-kicker">SCAN WITH YOUR PHONE</p>
-          <div className="room-code-row">
-            <span>ROOM CODE</span>
-            <strong>{room.code.toUpperCase()}</strong>
+          <div className="qr-frame">
+            <QRCodeSVG
+              value={joinUrl}
+              size={440}
+              level="M"
+              includeMargin
+              role="img"
+              aria-label="Scan to join this session"
+            />
           </div>
-          <button
-            className="secondary-button copy-link-button"
-            type="button"
-            onClick={() => void copyLink()}
-          >
-            {copied && <Check size={16} />}
-            {copied ? "Link copied" : "Copy join link"}
-          </button>
-          <div className="signup-window">
-            <div className="signup-countdown">
-              <span>SIGN-UP WINDOW</span>
-              <strong>{formatClock(signupRemaining)}</strong>
+          <div className="room-qr-actions">
+            <div className="room-code-row">
+              <span>ROOM CODE</span>
+              <strong>{room.code.toUpperCase()}</strong>
             </div>
             <button
-              className="secondary-button signup-extend-button"
+              className="secondary-button copy-link-button"
               type="button"
-              onClick={onExtendSignup}
-              disabled={busy}
+              onClick={() => void copyLink()}
             >
-              <Plus size={15} /> Add 1 minute
+              {copied && <Check size={16} />}
+              {copied ? "Link copied" : "Copy join link"}
             </button>
-          </div>
-          <div className="room-lobby-dancers" aria-hidden="true">
-            <BusinessPeopleArt />
           </div>
         </section>
         <section className="room-attendees-panel">
           <div className="room-attendees-heading">
             <div>
-              <p className="section-kicker">CHECKED IN</p>
+              <p className="section-kicker">
+                CHECKED IN
+                <span
+                  className={`room-live-dot${signupRemaining > 0 ? " open" : ""}`}
+                  aria-label={signupRemaining > 0 ? "Sign-up open" : "Sign-up closed"}
+                />
+              </p>
               <h2>{room.participants.length} people joined</h2>
             </div>
-            <span
-              className={`room-live-dot${signupRemaining > 0 ? " open" : ""}`}
-              aria-label={
-                signupRemaining > 0 ? "Sign-up open" : "Sign-up closed"
-              }
-            />
+            <div className="signup-countdown">
+              <span>SIGN-UP CLOSES IN</span>
+              <strong>{formatClock(signupRemaining)}</strong>
+            </div>
           </div>
           {room.participants.length ? (
             <ol className="room-attendee-list">
@@ -2652,86 +2613,134 @@ function RoomLobbyScreen({
             </ol>
           ) : (
             <div className="room-empty-state">
-              <Users size={24} />
+              <div aria-hidden="true"><BusinessPeopleArt pairIndex={0} /></div>
               <p>Waiting for the first person to join.</p>
             </div>
           )}
-          <form
-            className="room-manual-add"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void onAddParticipant(manualName, manualTeam, manualRole).then((added) => {
-                if (!added) return;
-                setManualName("");
-                setManualTeam("");
-                setManualRole("");
-              });
-            }}
-          >
-            <label>
-              <span>ADD SOMEONE WITHOUT A PHONE</span>
+          <div className="room-meeting-plan">
+            <label htmlFor="room-round-count">Number of rounds</label>
+            <div className="stepper">
+              <button
+                type="button"
+                aria-label="Fewer rounds"
+                disabled={busy || meetingCount <= 1}
+                onClick={() => onMeetCountChange(meetingCount - 1)}
+              >
+                −
+              </button>
               <input
-                type="text"
-                value={manualName}
-                onChange={(event) => setManualName(event.target.value)}
-                placeholder="Full name"
-                autoComplete="name"
-                minLength={2}
-                maxLength={80}
-                required
-                disabled={busy}
+                id="room-round-count"
+                type="number"
+                min="1"
+                max={roundLimit || 1}
+                value={meetingCount}
+                disabled={busy || !roundLimit}
+                aria-describedby="room-meeting-count-help"
+                onChange={(event) =>
+                  onMeetCountChange(
+                    clamp(Number(event.target.value), 1, roundLimit || 1),
+                  )
+                }
               />
-            </label>
-            <label>
-              <span>TEAM</span>
-              <select
-                value={manualTeam}
-                onChange={(event) => setManualTeam(event.target.value)}
-                required
-                disabled={busy}
+              <button
+                type="button"
+                aria-label="More rounds"
+                disabled={busy || meetingCount >= roundLimit}
+                onClick={() => onMeetCountChange(meetingCount + 1)}
               >
-                <option value="">Choose team</option>
-                {SIGNUP_TEAMS.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>ROLE</span>
-              <select
-                value={manualRole}
-                onChange={(event) => setManualRole(event.target.value)}
-                required
-                disabled={busy}
-              >
-                <option value="">Choose role</option>
-                {SIGNUP_ROLES.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              className="secondary-button"
-              type="submit"
-              disabled={busy || manualName.trim().length < 2 || !manualTeam || !manualRole}
-            >
-              Add person
-            </button>
-            <small>
-              They can find their group in the conversation list on this screen.
+                +
+              </button>
+            </div>
+            <small id="room-meeting-count-help">
+              {roundLimit
+                ? `1–${roundLimit} cross-team rounds · ${formatDuration(calculateDurationSeconds({ ...settings, rounds: meetingCount }))} estimated${room.participants.length % 2 ? " · one rotating break per round" : ""}`
+                : room.participants.length < MIN_ROOM_PARTICIPANTS
+                  ? `Waiting for at least ${MIN_ROOM_PARTICIPANTS} people`
+                  : "No complete cross-team round is possible. Add people from other teams."}
             </small>
-          </form>
+          </div>
+          <details className="room-manual-details">
+            <summary>Add someone without a phone</summary>
+            <form
+              className="room-manual-add"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void onAddParticipant(manualName, manualTeam, manualRole).then((added) => {
+                  if (!added) return;
+                  setManualName("");
+                  setManualTeam("");
+                  setManualRole("");
+                });
+              }}
+            >
+              <label>
+                <span>FULL NAME</span>
+                <input
+                  type="text"
+                  value={manualName}
+                  onChange={(event) => setManualName(event.target.value)}
+                  placeholder="Full name"
+                  autoComplete="name"
+                  minLength={2}
+                  maxLength={80}
+                  required
+                  disabled={busy}
+                />
+              </label>
+              <label>
+                <span>TEAM</span>
+                <select
+                  value={manualTeam}
+                  onChange={(event) => setManualTeam(event.target.value)}
+                  required
+                  disabled={busy}
+                >
+                  <option value="">Choose team</option>
+                  {SIGNUP_TEAMS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>ROLE</span>
+                <select
+                  value={manualRole}
+                  onChange={(event) => setManualRole(event.target.value)}
+                  required
+                  disabled={busy}
+                >
+                  <option value="">Choose role</option>
+                  {SIGNUP_ROLES.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="primary-button"
+                type="submit"
+                disabled={busy || manualName.trim().length < 2 || !manualTeam || !manualRole}
+              >
+                Add person
+              </button>
+              <small>
+                They can find their group in the conversation list on this screen.
+              </small>
+            </form>
+          </details>
           <div className="room-lobby-footer">
-            <span>
-              {signupRemaining > 0
-                ? "Sign-up closes in " + formatClock(signupRemaining)
-                : "Sign-up window closed"}
-            </span>
+            <button
+              className="secondary-button signup-extend-button"
+              type="button"
+              onClick={onExtendSignup}
+              disabled={busy}
+            >
+              <Plus size={15} /> Add 1 minute
+            </button>
             <button
               className="primary-button"
               type="button"
               disabled={
-                busy || room.participants.length < MIN_ROOM_PARTICIPANTS
+                busy || room.participants.length < MIN_ROOM_PARTICIPANTS || !roundLimit
               }
               onClick={onStart}
             >
@@ -3021,8 +3030,9 @@ function PreviewScreen({
   return (
     <section className="preview-screen">
       <div className="page-toolbar">
-        <button className="back-button" onClick={onBack}>
-          <ArrowLeft size={16} aria-hidden="true" /> Back to setup
+        <button className="back-button character-back-button" type="button" onClick={onBack}>
+          <span aria-hidden="true"><BusinessPeopleArt pointingLeft /></span>
+          Back to setup
         </button>
         <span className="preview-tag">
           <i /> PAIRINGS READY
@@ -3272,7 +3282,6 @@ function RoundScreen({
   onFullscreen: () => void;
   onBegin: () => void;
 }) {
-  const progress = (round.number / session.rounds.length) * 100;
   const isFinding =
     session.timer.phase === "intro" ||
     (session.timer.phase === "paused" &&
@@ -3283,7 +3292,7 @@ function RoundScreen({
     >
       <div className="round-topline">
         <div>
-          <p className="section-kicker">TEAM CONNECTION SESSION</p>
+          <p className="section-kicker">NETWORKING SESSION</p>
           <h1>
             Round {round.number} <span>of {session.rounds.length}</span>
           </h1>
@@ -3302,23 +3311,10 @@ function RoundScreen({
           </button>
         </div>
       </div>
-      <div
-        className="progress-track"
-        role="progressbar"
-        aria-label="Session progress"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(progress)}
-      >
-        <span style={{ width: `${progress}%` }} />
-      </div>
-      <h2 className="round-action-heading">
-        {isFinding ? "Find your person." : "It’s conversation time."}
-      </h2>
-      <div className="round-focus">
+      <div className={`round-focus${isFinding ? " finding-phase" : ""}`}>
         <div className="timer-block">
           <div className="session-timer-face">
-            <span>{isFinding ? "FIND YOUR PERSON" : "CONVERSATION TIME"}</span>
+            <span>            {isFinding ? "FIND YOUR PERSON" : "CONVERSATION TIME"}</span>
             <strong className={remaining < 30_000 ? "timer-urgent" : ""}>
               {formatClock(remaining)}
             </strong>
@@ -3348,53 +3344,53 @@ function RoundScreen({
                   ? `ICEBREAKER · ${round.question.category}`
                   : "YOUR CONVERSATION"}
             </span>
-            <h2>
+            <h2 className="round-action-heading">
               {isFinding
-                ? "Find your name in the conversation list below."
+                ? "Find your person."
                 : (round.question?.prompt ??
                   `Use these ${session.settings.conversationMinutes} minutes to get to know each other.`)}
             </h2>
             {isFinding && (
               <p className="panel-subtitle">
-                Find your group in the same card. You can connect without a phone.
+                Find your name below, then meet your partner.
               </p>
             )}
           </div>
         </div>
+        {isFinding && (
+          <button
+            className="primary-button compact find-partner-action"
+            type="button"
+            onClick={onBegin}
+            disabled={paused}
+          >
+            Start conversation now
+          </button>
+        )}
       </div>
-      {isFinding && (
-        <button
-          className="primary-button compact find-partner-action"
-          type="button"
-          onClick={onBegin}
-          disabled={paused}
-        >
-          Start conversation now
-        </button>
-      )}
-      {paused && (
-        <div className="paused-banner">
-          <Pause size={17} /> SESSION PAUSED{" "}
-          <span>Choose resume when the room is ready.</span>
-        </div>
-      )}
-      {!!round.sameTeamPairs?.length && (
-        <div className="warning-banner" role="status">
-          <HelpCircle size={17} /> Some same-team conversations are included as a last resort
-          because no new cross-team match was available.
-        </div>
-      )}
-      {round.stations.some((station) => station.kind === "break") && (
-        <div className="warning-banner" role="status">
-          <HelpCircle size={17} /> People shown in a break card sit out this round.
-          Odd-numbered breaks rotate; repeat and director–lead matches remain excluded.
+      {(paused || !!round.sameTeamPairs?.length ||
+        round.stations.some((station) => station.kind === "break")) && (
+        <div className="round-status">
+          {paused && (
+            <div className="paused-banner" role="status">
+              <Pause size={14} /> Paused
+              <span>— resume when ready.</span>
+            </div>
+          )}
+          {!!round.sameTeamPairs?.length && (
+            <div className="warning-banner" role="status">
+              <HelpCircle size={14} /> This saved round includes same-team pairings.
+            </div>
+          )}
+          {round.stations.some((station) => station.kind === "break") && (
+            <div className="warning-banner" role="status">
+              <HelpCircle size={14} /> Break cards show who rests this round.
+            </div>
+          )}
         </div>
       )}
       <div className="station-grid-heading">
-        <div>
-          <p className="section-kicker">YOUR CONVERSATIONS</p>
-          <h2>Round {round.number} conversations</h2>
-        </div>
+        <h2>Your conversations</h2>
         <span>
           {round.stations.filter((station) => station.kind !== "break").length}{" "}
           conversations

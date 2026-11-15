@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 type Character = {
   kind:
     "casual" | "skirt" | "tie" | "wheelchair" | "beanie" | "blazer" | "punk";
+  tempo: number;
   height: number;
   build: number;
   skin: string;
@@ -14,6 +15,7 @@ type Character = {
 const people: Character[] = [
   {
     kind: "casual",
+    tempo: 0.9,
     height: 48,
     build: 8,
     skin: "#edc9a0",
@@ -23,6 +25,7 @@ const people: Character[] = [
   },
   {
     kind: "wheelchair",
+    tempo: 0.78,
     height: 34,
     build: 11,
     skin: "#b67e55",
@@ -32,6 +35,7 @@ const people: Character[] = [
   },
   {
     kind: "skirt",
+    tempo: 1.08,
     height: 37,
     build: 11,
     skin: "#d79e7d",
@@ -41,6 +45,7 @@ const people: Character[] = [
   },
   {
     kind: "tie",
+    tempo: 0.86,
     height: 51,
     build: 10,
     skin: "#8e563d",
@@ -50,6 +55,7 @@ const people: Character[] = [
   },
   {
     kind: "beanie",
+    tempo: 0.62,
     height: 33,
     build: 13,
     skin: "#deb68c",
@@ -59,6 +65,7 @@ const people: Character[] = [
   },
   {
     kind: "blazer",
+    tempo: 0.98,
     height: 41,
     build: 14,
     skin: "#704430",
@@ -68,6 +75,7 @@ const people: Character[] = [
   },
   {
     kind: "punk",
+    tempo: 1.3,
     height: 44,
     build: 9,
     skin: "#ca906e",
@@ -81,8 +89,8 @@ function drawPerson(
   context: CanvasRenderingContext2D,
   person: Character,
   originX: number,
-  dance = 0,
   phase: number | null = null,
+  pointingLeft = false,
 ) {
   const ink = "#232c34";
   const floor = 52;
@@ -91,9 +99,11 @@ function drawPerson(
   const torsoHeight = person.kind === "beanie" ? 11 : 14;
   const waist = torsoTop + torsoHeight;
   const left = 12 - Math.floor(person.build / 2);
-  const sway = dance * (person.kind === "wheelchair" ? 0.6 : 1.1);
-  let leftLift = Math.max(0, dance) * 8;
-  let rightLift = Math.max(0, -dance) * 8;
+  let sway = 0;
+  let dip = 0;
+  let step = 0;
+  let leftLift = 0;
+  let rightLift = 0;
   let leftReach = 0;
   let rightReach = 0;
   if (phase !== null) {
@@ -101,38 +111,57 @@ function drawPerson(
     const counterWave = (Math.sin(phase * 1.2 + Math.PI) + 1) / 2;
     switch (person.kind) {
       case "casual":
+        sway = Math.sin(phase * 0.6) * 1.8;
+        dip = wave * 0.7;
+        step = Math.sin(phase * 0.6) * 1.1;
         leftLift = 18 + wave * 12;
         rightLift = counterWave * 4;
         leftReach = 1 + Math.sin(phase * 2.4);
         break;
       case "wheelchair":
+        sway = Math.sin(phase * 0.7) * 0.9;
+        dip = wave * 0.4;
         leftLift = 8 + wave * 14;
         rightLift = counterWave * 2;
         leftReach = 1 + Math.sin(phase * 1.8);
         break;
       case "skirt":
+        sway = Math.sin(phase * 0.8) * 1.8;
+        dip = Math.abs(Math.sin(phase * 0.8)) * 0.7;
+        step = Math.sin(phase * 1.6) * 1.2;
         leftLift = wave * 14;
         rightLift = 5 + counterWave * 13;
         rightReach = 1 + Math.sin(phase * 2);
         break;
       case "tie":
+        sway = Math.sin(phase * 0.5) * 0.8;
+        dip = wave * 1.8;
         leftLift = 5 + wave * 8;
         rightLift = 5 + wave * 8;
         leftReach = 1 + Math.sin(phase);
         rightReach = 1 + Math.sin(phase);
         break;
       case "beanie":
+        sway = Math.sin(phase * 0.55) * 1.5;
+        dip = Math.abs(Math.sin(phase)) * 0.5;
+        step = Math.sin(phase * 0.55) * 1.1;
         leftLift = 3 + counterWave * 5;
         rightLift = 3 + wave * 5;
         leftReach = counterWave * 2;
         rightReach = wave * 2;
         break;
       case "blazer":
+        sway = Math.sin(phase * 0.7) * 1.4;
+        dip = Math.max(0, Math.sin(phase * 1.4)) * 0.8;
+        step = Math.sin(phase * 0.7) * 0.8;
         leftLift = counterWave * 3;
         rightLift = 12 + wave * 10;
         rightReach = 1 + Math.sin(phase * 2.8);
         break;
       case "punk":
+        sway = Math.sin(phase * 1.3) * 1.5;
+        dip = Math.abs(Math.sin(phase * 1.2)) * 2.2;
+        step = Math.sin(phase * 1.2) * 0.7;
         leftLift = 20 + wave * 10;
         rightLift = 20 + counterWave * 10;
         leftReach = wave * 2;
@@ -140,6 +169,12 @@ function drawPerson(
         break;
     }
   }
+  const applyPose = () => {
+    context.transform(
+      1, 0, sway / person.height, 1 - dip / person.height,
+      -floor * sway / person.height, floor * dip / person.height,
+    );
+  };
   const rect = (
     color: string,
     offsetX: number,
@@ -149,7 +184,7 @@ function drawPerson(
     grounded = false,
   ) => {
     context.save();
-    if (!grounded) context.transform(1, 0, sway / person.height, 1, -floor * sway / person.height, 0);
+    if (!grounded) applyPose();
     context.fillStyle = color;
     context.fillRect(originX + offsetX, offsetY, width, height);
     context.restore();
@@ -157,12 +192,18 @@ function drawPerson(
 
   const drawArm = (shoulderX: number, side: number, lift: number, reach: number) => {
     const shoulderY = torsoTop + 3;
+    if (pointingLeft && side < 0) {
+      rect(person.outfit, shoulderX - 5, shoulderY - 1, 6, 2);
+      rect(person.skin, shoulderX - 9, shoulderY - 1, 4, 2);
+      rect(person.skin, shoulderX - 11, shoulderY - 1, 3, 1);
+      return;
+    }
     const handX = shoulderX + side * reach;
     const handY = (person.kind === "wheelchair" ? torsoTop + 11 : waist + 1) - lift;
     const elbowX = shoulderX + side * (1.5 + reach * 0.5);
     const elbowY = (shoulderY + handY) / 2 + 1;
     context.save();
-    context.transform(1, 0, sway / person.height, 1, -floor * sway / person.height, 0);
+    applyPose();
     context.lineWidth = 2;
     context.lineCap = "butt";
     context.lineJoin = "bevel";
@@ -215,20 +256,20 @@ function drawPerson(
   } else {
     const legWidth = person.build >= 13 ? 4 : person.build <= 9 ? 2 : 3;
     if (person.kind === "skirt") {
-      rect(person.skin, 8, waist + 5, 2, floor - waist - 7);
-      rect(person.skin, 14, waist + 5, 2, floor - waist - 7);
+      rect(person.skin, 8 + step, waist + 5, 2, floor - waist - 7);
+      rect(person.skin, 14 - step, waist + 5, 2, floor - waist - 7);
       rect(person.outfit, left, waist - 1, person.build, 3);
       rect(person.outfit, left - 1, waist + 2, person.build + 2, 4);
       rect(ink, left - 1, waist + 6, person.build + 2, 1);
     } else {
-      rect(person.trousers, 8, waist, legWidth, floor - waist - 2);
-      rect(person.trousers, 14, waist, legWidth, floor - waist - 2);
+      rect(person.trousers, 8 + step, waist, legWidth, floor - waist - 2);
+      rect(person.trousers, 14 - step, waist, legWidth, floor - waist - 2);
     }
-    rect(ink, 6, floor - 2, legWidth + 3, 2, true);
-    rect(ink, 14, floor - 2, legWidth + 3, 2, true);
+    rect(ink, 6 + step, floor - 2, legWidth + 3, 2, true);
+    rect(ink, 14 - step, floor - 2, legWidth + 3, 2, true);
     if (person.kind === "casual") {
-      rect("#eeeae1", 6, floor - 1, legWidth + 3, 1, true);
-      rect("#eeeae1", 14, floor - 1, legWidth + 3, 1, true);
+      rect("#eeeae1", 6 + step, floor - 1, legWidth + 3, 1, true);
+      rect("#eeeae1", 14 - step, floor - 1, legWidth + 3, 1, true);
     }
     rect(person.outfit, left, torsoTop, person.build, torsoHeight);
     rect(person.outfit, left + 2, torsoTop - 1, person.build - 4, 1);
@@ -298,13 +339,15 @@ function drawPerson(
 export default function BusinessPeopleArt({
   single = false,
   pairIndex,
+  pointingLeft = false,
 }: {
   single?: boolean;
   pairIndex?: number;
+  pointingLeft?: boolean;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [characterIndex] = useState(() => Math.floor(Math.random() * people.length));
-  const logicalWidth = pairIndex !== undefined ? 48 : single ? 24 : 168;
+  const logicalWidth = pointingLeft ? 36 : pairIndex !== undefined ? 48 : single ? 24 : 168;
   useEffect(() => {
     const context = canvas.current?.getContext("2d");
     if (!context) return;
@@ -315,19 +358,21 @@ export default function BusinessPeopleArt({
     const paint = (timestamp: number) => {
       context.clearRect(0, 0, logicalWidth, 64);
       const firstPairIndex = pairIndex === undefined ? 0 : (pairIndex * 2) % people.length;
-      const selectedPeople = pairIndex !== undefined
+      const selectedPeople = pointingLeft ? [people[0]] : pairIndex !== undefined
         ? [people[firstPairIndex], people[(firstPairIndex + 1) % people.length]]
         : single ? [people[characterIndex]] : people;
       selectedPeople.forEach((person, index) => {
-        const phase = motionPreference.matches ? null : timestamp / 350 + index * 0.8;
-        const dance = phase === null ? 0 : Math.sin(phase);
+        const phase = motionPreference.matches || pointingLeft
+          ? null
+          : timestamp / 350 * person.tempo + people.indexOf(person) * 0.9;
+        const originX = pointingLeft ? 12 : index * 24;
         context.fillStyle = "#1b2c2d18";
         context.beginPath();
-        context.ellipse(index * 24 + 12, person.kind === "wheelchair" ? 59.4 : 58.4, person.kind === "wheelchair" ? 11 : 9, 1.1, 0, 0, Math.PI * 2);
+        context.ellipse(originX + 12, person.kind === "wheelchair" ? 59.4 : 58.4, person.kind === "wheelchair" ? 11 : 9, 1.1, 0, 0, Math.PI * 2);
         context.fill();
         context.save();
         context.translate(0, 6);
-        drawPerson(context, person, index * 24, dance, phase);
+        drawPerson(context, person, originX, phase, pointingLeft);
         context.restore();
       });
     };
@@ -338,7 +383,7 @@ export default function BusinessPeopleArt({
     const start = () => {
       window.cancelAnimationFrame(frame);
       paint(0);
-      if (!motionPreference.matches) frame = window.requestAnimationFrame(animate);
+      if (!motionPreference.matches && !pointingLeft) frame = window.requestAnimationFrame(animate);
     };
     motionPreference.addEventListener("change", start);
     start();
@@ -346,17 +391,17 @@ export default function BusinessPeopleArt({
       window.cancelAnimationFrame(frame);
       motionPreference.removeEventListener("change", start);
     };
-  }, [single, characterIndex, logicalWidth, pairIndex]);
+  }, [single, characterIndex, logicalWidth, pairIndex, pointingLeft]);
   return (
     <canvas
       ref={canvas}
       width={logicalWidth * 3}
       height={192}
-      className={`business-people-art${pairIndex !== undefined ? " pair-people-art" : single ? " single-person-art" : ""}`}
+      className={`business-people-art${pointingLeft ? " pointing-person-art" : pairIndex !== undefined ? " pair-people-art" : single ? " single-person-art" : ""}`}
       role="img"
-      aria-label={pairIndex !== undefined ? "Two dancing office characters" : single ? `Dancing office character: ${people[characterIndex].kind}` : "Seven playful pixel-art office people of different heights and builds, including a wheelchair user, a pink skirt, a beanie wearer, a punk, and a long-haired person in a loud T-shirt"}
+      aria-label={pointingLeft ? "Office character pointing left" : pairIndex !== undefined ? "Two dancing office characters" : single ? `Dancing office character: ${people[characterIndex].kind}` : "Seven playful pixel-art office people of different heights and builds, including a wheelchair user, a pink skirt, a beanie wearer, a punk, and a long-haired person in a loud T-shirt"}
     >
-      {pairIndex !== undefined ? "Two dancing office characters." : single ? "One randomly selected dancing office character." : "A varied office group with suits, a skirt, a wheelchair, a pink mohawk, and a deliberately terrible patterned T-shirt."}
+      {pointingLeft ? "An office character pointing to the left." : pairIndex !== undefined ? "Two dancing office characters." : single ? "One randomly selected dancing office character." : "A varied office group with suits, a skirt, a wheelchair, a pink mohawk, and a deliberately terrible patterned T-shirt."}
     </canvas>
   );
 }

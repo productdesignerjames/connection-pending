@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="4" fill="#f5cf61" />
-  <text x="5" y="43" fill="#29262c" font-family="Avenir Next, Avenir, sans-serif" font-size="32" font-weight="800">sm</text>
-  <circle cx="13" cy="20" r="4" fill="#29262c" />
-</svg>

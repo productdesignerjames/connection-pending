@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <title>Speed Meets</title>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#f3eddf" stroke="#40263e" stroke-width="3" />
+  <g fill="none" stroke="#a02251" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M26 21H16a6 6 0 0 0 0 12h4a6 6 0 0 1 0 12H10" />
+    <path d="M35 45V21l9 13 9-13v24" />
+  </g>
+</svg>

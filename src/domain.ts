@@ -1,3 +1,5 @@
+import blossom from "edmonds-blossom";
+
 export type OddAttendanceMode = "trio" | "break";
 export type IcebreakerCategory =
   | "Light and fun"
@@ -122,7 +124,7 @@ export interface StoredAppData {
   soundVolume: number;
 }
 
-export const APP_NAME = "Speed Meetings";
+export const APP_NAME = "Speed Meets";
 export const SIGNUP_TEAMS = [
   "AI talk team",
   "Design system team",
@@ -568,12 +570,11 @@ export function generateRounds(
 export function canMeet(
   first: { team?: string; role?: string },
   second: { team?: string; role?: string },
-  allowSameTeam = false,
 ): boolean {
   const normalize = (value?: string) =>
     value?.trim().replace(/\s+/g, " ").toLocaleLowerCase() ?? "";
   const firstTeam = normalize(first.team);
-  if (!allowSameTeam && firstTeam && firstTeam === normalize(second.team)) return false;
+  if (firstTeam && firstTeam === normalize(second.team)) return false;
   const firstRole = normalize(first.role);
   const secondRole = normalize(second.role);
   const isDirector = (role: string) =>
@@ -584,165 +585,168 @@ export function canMeet(
   );
 }
 
+export const MAX_MEETUP_ROUNDS = 40;
+type MeetupAttendee = { id: string; team?: string; role?: string };
+
 export function generateMeetupRounds(
-  attendees: { id: string; team?: string; role?: string }[],
+  attendees: MeetupAttendee[],
   requestedRounds: number,
   random: () => number = Math.random,
 ): Round[] {
-  const people = [
-    ...new Map(attendees.map((person) => [person.id, person])).values(),
-  ];
-  if (people.length < 2 || requestedRounds < 1) return [];
-  const byId = new Map(people.map((person) => [person.id, person]));
-  const breakCounts = new Map(people.map((person) => [person.id, 0]));
-  const history = new Set<string>();
-  const eligible = (first: string, second: string, allowSameTeam = false) =>
-    canMeet(byId.get(first)!, byId.get(second)!, allowSameTeam) &&
-    !history.has(pairKey(first, second));
-  const constraintWeight = people.length * requestedRounds + 1;
-  const score = (ids: string[]) =>
-    ids.length === 1 ? breakCounts.get(ids[0])! : ids.reduce(
-      (total, first, index) =>
-        total +
-        ids
-          .slice(index + 1)
-          .reduce(
-            (subtotal, second) =>
-              subtotal +
-              Number(!eligible(first, second)) * constraintWeight,
-            0,
-          ),
-      0,
-    );
-  const rounds: Round[] = [];
-  for (let roundIndex = 0; roundIndex < requestedRounds; roundIndex += 1) {
-    const remaining = shuffled(
-      people.map((person) => person.id),
-      random,
-    );
-    let breakId: string | undefined;
-    if (remaining.length % 2 === 1) {
-      const fewestBreaks = Math.min(...remaining.map((id) => breakCounts.get(id)!));
-      const index = remaining.findIndex((id) => breakCounts.get(id) === fewestBreaks);
-      [breakId] = remaining.splice(index, 1);
-    }
-    const groups: string[][] = [];
-    while (remaining.length)
-      groups.push(remaining.splice(0, 2));
-    if (breakId) groups.push([breakId]);
-    let improved = true;
-    while (improved) {
-      improved = false;
-      let bestChange = 0;
-      let bestSwap: [number, number, number, number] | null = null;
-      for (let firstGroup = 0; firstGroup < groups.length; firstGroup += 1) {
-        for (
-          let secondGroup = firstGroup + 1;
-          secondGroup < groups.length;
-          secondGroup += 1
-        ) {
-          const before = score(groups[firstGroup]) + score(groups[secondGroup]);
-          for (
-            let firstMember = 0;
-            firstMember < groups[firstGroup].length;
-            firstMember += 1
-          ) {
-            for (
-              let secondMember = 0;
-              secondMember < groups[secondGroup].length;
-              secondMember += 1
-            ) {
-              const first = [...groups[firstGroup]];
-              const second = [...groups[secondGroup]];
-              [first[firstMember], second[secondMember]] = [
-                second[secondMember],
-                first[firstMember],
-              ];
-              const change = score(first) + score(second) - before;
-              if (change < bestChange) {
-                bestChange = change;
-                bestSwap = [firstGroup, secondGroup, firstMember, secondMember];
-              }
-            }
-          }
-        }
-      }
-      if (bestSwap) {
-        const [firstGroup, secondGroup, firstMember, secondMember] = bestSwap;
-        [groups[firstGroup][firstMember], groups[secondGroup][secondMember]] = [
-          groups[secondGroup][secondMember],
-          groups[firstGroup][firstMember],
-        ];
-        improved = true;
-      }
-    }
-    breakId = groups.find((group) => group.length === 1)?.[0];
-    const validGroups: string[][] = [];
-    for (const group of groups) {
-      if (group.length === 1) continue;
-      const partitions: string[][] = [];
-      for (const id of group) {
-        const target = partitions.find((part) =>
-          part.every((other) => eligible(id, other)),
-        );
-        if (target) target.push(id);
-        else partitions.push([id]);
-      }
-      validGroups.push(...partitions);
-    }
-    const mergeUnmatched = (allowSameTeam: boolean) => {
-      for (let index = 0; index < validGroups.length; index += 1) {
-        const group = validGroups[index];
-        if (group.length !== 1) continue;
-        const canJoin = (other: string[], otherIndex: number) =>
-          otherIndex !== index &&
-          other.every((id) => eligible(group[0], id, allowSameTeam));
-        const target = validGroups.find((other, otherIndex) =>
-          other.length === 1 && canJoin(other, otherIndex),
-        );
-        if (target) {
-          target.push(group[0]);
-          group.length = 0;
-        }
-      }
-    };
-    mergeUnmatched(false);
-    mergeUnmatched(true);
-    const finalGroups = validGroups.filter((group) => group.length > 0);
-    if (breakId) finalGroups.push([breakId]);
-    const sameTeamPairs: string[][] = [];
-    for (const group of finalGroups) {
-      if (group.length === 1)
-        breakCounts.set(group[0], breakCounts.get(group[0])! + 1);
-      group.forEach((first, index) =>
-        group.slice(index + 1).forEach((second) => {
-          if (!canMeet(byId.get(first)!, byId.get(second)!))
-            sameTeamPairs.push([first, second]);
-          history.add(pairKey(first, second));
-        }),
+  const people = [...new Map(attendees.map((person) => [person.id, person])).values()];
+  if (people.length < 2 || !Number.isInteger(requestedRounds) || requestedRounds < 1)
+    return [];
+  const odd = people.length % 2;
+  const degrees = people.map((first) =>
+    people.filter((second) => first.id !== second.id && canMeet(first, second)).length,
+  );
+  // Odd rooms need an extra round to accommodate each person's rotating break.
+  const limit = Math.min(
+    requestedRounds,
+    MAX_MEETUP_ROUNDS,
+    people.length - 1 + odd,
+    Math.min(...degrees) + odd,
+    Math.floor(degrees.reduce((sum, degree) => sum + degree, 0) / 2 /
+      Math.floor(people.length / 2)),
+  );
+  if (!limit) return [];
+  const makeRound = (groups: string[][], number: number): Round => ({
+    number,
+    stations: groups.map((participantIds, index) => ({
+      number: index + 1,
+      participantIds,
+      stayingId: participantIds[0],
+      movingIds: participantIds.slice(1),
+      kind: participantIds.length === 1 ? "break" : "pair",
+      ...(participantIds.length === 1 ? {
+        activity: "Your turn for a short break. Enjoy a breather while others chat.",
+      } : {}),
+    })),
+    repeatedPairs: [],
+    sameTeamPairs: [],
+  });
+  if (degrees.every((degree) => degree === people.length - 1)) {
+    const rotation = shuffled(people.map((_, index) => index), random);
+    if (odd) rotation.push(people.length);
+    return Array.from({ length: limit }, (_, index) => {
+      const groups = Array.from({ length: rotation.length / 2 }, (_, pair) =>
+        [rotation[pair], rotation[rotation.length - 1 - pair]]
+          .filter((person) => person < people.length)
+          .map((person) => people[person].id),
       );
-    }
-    rounds.push({
-      number: roundIndex + 1,
-      stations: finalGroups.map((participantIds, index) => ({
-        number: index + 1,
-        participantIds,
-        stayingId: participantIds[0],
-        movingIds: participantIds.slice(1),
-        kind: participantIds.length === 1 ? "break" : "pair",
-        ...(participantIds.length === 1
-          ? {
-              activity: participantIds[0] === breakId
-                ? "Your turn for a short break. Enjoy a breather while others chat."
-                : "No new eligible match this round.",
-            }
-          : {}),
-      })),
-      repeatedPairs: [],
-      sameTeamPairs,
+      const last = rotation.pop()!;
+      rotation.splice(1, 0, last);
+      return makeRound(groups, index + 1);
     });
   }
-  return rounds;
+  let best: Round[] = [];
+  for (let attempt = 0; attempt < 12 && best.length < limit; attempt += 1) {
+    let seed = (Math.floor(random() * 2 ** 32) + Math.imul(attempt + 1, 2654435761)) >>> 0;
+    const weight = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return 1 + seed % 1000;
+    };
+    const history = new Set<string>();
+    const rested = new Set<string>();
+    const rounds: Round[] = [];
+    for (let index = 0; index < limit; index += 1) {
+      const edges: number[][] = [];
+      people.forEach((first, firstIndex) => {
+        people.slice(firstIndex + 1).forEach((second, offset) => {
+          if (canMeet(first, second) && !history.has(pairKey(first.id, second.id)))
+            edges.push([firstIndex, firstIndex + offset + 1, weight()]);
+        });
+        if (odd && !rested.has(first.id))
+          edges.push([firstIndex, people.length, weight()]);
+      });
+      if (!edges.length) break;
+      // The extra vertex represents the single rotating break in an odd room.
+      const mates = blossom(edges, true);
+      if (Array.from({ length: people.length + odd }, (_, person) => person)
+        .some((person) => !(mates[person] >= 0))) break;
+      const groups: string[][] = [];
+      people.forEach((person, personIndex) => {
+        const mate = mates[personIndex];
+        if (mate < personIndex) return;
+        if (mate === people.length) {
+          groups.push([person.id]);
+          rested.add(person.id);
+        } else {
+          groups.push([person.id, people[mate].id]);
+          history.add(pairKey(person.id, people[mate].id));
+        }
+      });
+      rounds.push(makeRound(groups, index + 1));
+    }
+    if (rounds.length > best.length) best = rounds;
+  }
+  return best;
+}
+
+export function isValidMeetupSchedule(
+  attendees: MeetupAttendee[],
+  submitted: unknown,
+): submitted is Round[] {
+  const people = new Map(attendees.map((person) => [person.id, person]));
+  if (!Array.isArray(submitted) || !submitted.length ||
+    submitted.length > MAX_MEETUP_ROUNDS ||
+    submitted.length > people.size - 1 + people.size % 2) return false;
+  const record = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+  const history = new Set<string>();
+  const rested = new Set<string>();
+  for (const [index, round] of submitted.entries()) {
+    if (!record(round) || round.number !== index + 1 ||
+      !Array.isArray(round.stations) || !Array.isArray(round.repeatedPairs) ||
+      round.repeatedPairs.length ||
+      (round.sameTeamPairs !== undefined &&
+        (!Array.isArray(round.sameTeamPairs) || round.sameTeamPairs.length))) return false;
+    if (round.question !== undefined) {
+      const question = round.question;
+      if (!record(question) || typeof question.id !== "string" ||
+        typeof question.prompt !== "string" || typeof question.enabled !== "boolean" ||
+        typeof question.custom !== "boolean" ||
+        ![...DEFAULT_QUESTIONS, ...LEGACY_QUESTIONS].some(
+          (known) => known.category === question.category,
+        )) return false;
+    }
+    const included = new Set<string>();
+    let breaks = 0;
+    for (const [stationIndex, station] of round.stations.entries()) {
+      if (!record(station) || station.number !== stationIndex + 1 ||
+        !Array.isArray(station.participantIds) ||
+        !Array.isArray(station.movingIds) ||
+        (station.activity !== undefined && typeof station.activity !== "string")) return false;
+      const ids: unknown[] = station.participantIds;
+      if ((station.kind !== "pair" || ids.length !== 2) &&
+        (station.kind !== "break" || ids.length !== 1)) return false;
+      for (const id of ids) {
+        if (typeof id !== "string" || !people.has(id) || included.has(id)) return false;
+        included.add(id);
+      }
+      if (station.stayingId !== ids[0] ||
+        station.movingIds.length !== ids.length - 1 ||
+        station.movingIds.some((id, movingIndex) => id !== ids[movingIndex + 1]))
+        return false;
+      const firstId = station.stayingId;
+      if (typeof firstId !== "string") return false;
+      const first = people.get(firstId)!;
+      if (station.kind === "break") {
+        if (rested.has(firstId)) return false;
+        rested.add(firstId);
+        breaks += 1;
+      } else {
+        const secondId = ids[1];
+        if (typeof secondId !== "string") return false;
+        const second = people.get(secondId)!;
+        const key = pairKey(firstId, secondId);
+        if (!canMeet(first, second) || history.has(key)) return false;
+        history.add(key);
+      }
+    }
+    if (included.size !== people.size || breaks !== people.size % 2) return false;
+  }
+  return true;
 }
 
 export function countConversations(rounds: Round[]): number {

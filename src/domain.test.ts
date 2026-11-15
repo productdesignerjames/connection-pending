@@ -9,6 +9,7 @@ import {
   canMeet,
   generateRounds,
   generateMeetupRounds,
+  isValidMeetupSchedule,
   pairingsForAttendees,
   selectQuestions,
   validateDisplayName,
@@ -284,7 +285,7 @@ describe("team-aware meetup rounds", () => {
     }
   });
 
-  it("uses same-team matches as a last resort without repeating conversations", () => {
+  it("refuses a full round when one team outnumbers all other teams", () => {
     const people = [
       "Sales",
       " sales ",
@@ -293,29 +294,10 @@ describe("team-aware meetup rounds", () => {
       "Design",
       "Design",
     ].map((team, index) => ({ id: `person-${index}`, team }));
-    const rounds = generateMeetupRounds(people, 4, stableRandom);
-    expect(rounds[0].sameTeamPairs).toHaveLength(1);
-    expect(rounds[0].stations.some((station) => station.kind === "break")).toBe(false);
-    const seen = new Set<string>();
-    for (const round of rounds) {
-      expect(round.repeatedPairs).toEqual([]);
-      for (const station of round.stations) {
-        station.participantIds.forEach((id, index) => {
-          for (const other of station.participantIds.slice(index + 1)) {
-            const key = [id, other].sort().join(":");
-            expect(seen.has(key)).toBe(false);
-            seen.add(key);
-          }
-        });
-      }
-      expect(
-        new Set(round.stations.flatMap((station) => station.participantIds))
-          .size,
-      ).toBe(6);
-    }
+    expect(generateMeetupRounds(people, 4, stableRandom)).toEqual([]);
   });
 
-  it("exhausts cross-team connections before falling back to teammates", () => {
+  it("caps two teams of two at two rounds instead of matching teammates", () => {
     const people = [
       { id: "a1", team: "A" },
       { id: "a2", team: "A" },
@@ -323,20 +305,16 @@ describe("team-aware meetup rounds", () => {
       { id: "b2", team: "B" },
     ];
     const rounds = generateMeetupRounds(people, 4, stableRandom);
-    expect(rounds.slice(0, 2).map((round) => round.sameTeamPairs)).toEqual([[], []]);
-    expect(rounds[2].sameTeamPairs).toHaveLength(2);
-    expect(rounds[2].stations.every((station) => station.kind === "pair")).toBe(true);
-    expect(rounds[3].stations.every((station) => station.kind === "break")).toBe(true);
+    expect(rounds).toHaveLength(2);
+    expect(isValidMeetupSchedule(people, rounds)).toBe(true);
   });
 
-  it("never relaxes the director–lead rule for same-team fallback", () => {
+  it("returns no rounds when director–lead restrictions prevent every pairing", () => {
     const rounds = generateMeetupRounds([
       { id: "director", team: "App", role: "Director of design" },
       { id: "lead", team: " app ", role: "Lead designer" },
     ], 2, stableRandom);
-    expect(rounds.every((round) =>
-      round.stations.every((station) => station.kind === "break"),
-    )).toBe(true);
+    expect(rounds).toEqual([]);
   });
 
   it("never pairs directors with leads", () => {
@@ -370,14 +348,45 @@ describe("team-aware meetup rounds", () => {
     expect(canMeet({ role: "Director of design" }, { role: "Product designer" })).toBe(true);
   });
 
-  it("gives breaks once every eligible new connection is exhausted", () => {
+  it("stops rather than adding empty rounds after eligible connections are exhausted", () => {
     const rounds = generateMeetupRounds([
       { id: "first", team: "A" },
       { id: "second", team: "B" },
     ], 2, stableRandom);
     expect(rounds[0].stations[0].kind).toBe("pair");
-    expect(rounds[1].stations.map((station) => station.kind)).toEqual(["break", "break"]);
-    expect(rounds[1].repeatedPairs).toEqual([]);
+    expect(rounds).toHaveLength(1);
+  });
+
+  it.each([
+    { teams: ["A", "B", "C", "D"], expected: 3 },
+    { teams: ["A", "B", "C", "D", "E"], expected: 5 },
+    { teams: ["A", "A", "A", "B", "B"], expected: 3 },
+  ])("calculates $expected complete rounds for $teams", ({ teams, expected }) => {
+    const people = teams.map((team, index) => ({ id: `person-${index}`, team }));
+    const rounds = generateMeetupRounds(people, 40, stableRandom);
+    expect(rounds).toHaveLength(expected);
+    expect(isValidMeetupSchedule(people, rounds)).toBe(true);
+  });
+
+  it("accounts for role restrictions and incompatible odd components", () => {
+    const people = ["Director of design", "Lead designer", "Product designer", "Product designer"]
+      .map((role, index) => ({ id: `person-${index}`, team: `team-${index}`, role }));
+    expect(generateMeetupRounds(people, 40, stableRandom)).toHaveLength(2);
+    const disconnected = Array.from({ length: 6 }, (_, index) => ({
+      id: `person-${index}`,
+      team: `team-${index}`,
+      role: index < 3 ? "Director of design" : "Lead designer",
+    }));
+    expect(generateMeetupRounds(disconnected, 40, stableRandom)).toEqual([]);
+  });
+
+  it("plans the supported 40 rounds for 100 balanced attendees", () => {
+    const people = Array.from({ length: 100 }, (_, index) => ({
+      id: `person-${index}`, team: SIGNUP_TEAMS[index % SIGNUP_TEAMS.length],
+    }));
+    const rounds = generateMeetupRounds(people, 40, stableRandom);
+    expect(rounds).toHaveLength(40);
+    expect(isValidMeetupSchedule(people, rounds)).toBe(true);
   });
 
   it("treats missing team values as unrestricted and handles small rooms", () => {

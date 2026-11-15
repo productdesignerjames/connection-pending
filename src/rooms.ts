@@ -3,7 +3,7 @@ import type {
   ParticipantIdentity,
   Round,
 } from "./domain.js";
-import { SIGNUP_ROLES } from "./domain.js";
+import { SIGNUP_ROLES, isValidMeetupSchedule } from "./domain.js";
 
 export const ROOM_SIGNUP_MS = 3 * 60 * 1000;
 export const MIN_ROOM_PARTICIPANTS = 3;
@@ -398,14 +398,20 @@ export async function handleRoomRequest(
   if (request.method === "POST" && action === "start") {
     if (body?.hostSecret !== room.hostSecret)
       return json({ error: "Only the organizer can start this session." }, 403);
-    const rounds = Array.isArray(body.rounds) ? (body.rounds as Round[]) : [];
-    if (room.participants.length < MIN_ROOM_PARTICIPANTS || !rounds.length)
+    if (room.status !== "lobby")
+      return json({ error: "This session has already started." }, 409);
+    if (room.participants.length < MIN_ROOM_PARTICIPANTS)
       return json(
         {
           error: `At least ${MIN_ROOM_PARTICIPANTS} people must join before starting.`,
         },
         409,
       );
+    const rounds: unknown = body.rounds;
+    if (!isValidMeetupSchedule(room.participants, rounds))
+      return json({
+        error: "Choose valid cross-team rounds: no repeated or director–lead pairings, everyone included, and only one rotating break for odd attendance.",
+      }, 400);
     room.rounds = rounds;
     room.status = "live";
     room.phase = body.phase === "intro" ? "intro" : "conversation";
