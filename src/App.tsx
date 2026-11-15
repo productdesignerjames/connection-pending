@@ -16,7 +16,6 @@ import {
   RotateCcw,
   Search,
   Settings2,
-  Smartphone,
   Shuffle,
   Sparkles,
   Users,
@@ -25,7 +24,6 @@ import {
   X,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import PairSymbol from "./components/PairSymbol";
 import BusinessPeopleArt from "./components/BusinessPeopleArt";
 import IntroMusicButton from "./components/IntroMusicButton";
 import {
@@ -74,7 +72,6 @@ import {
   addManualRoomParticipant,
   extendRoomSignup,
   joinRoom,
-  PAIR_SYMBOLS,
   readHostRoom,
   readPhoneRoom,
   ROOM_SIGNUP_MS,
@@ -3118,9 +3115,6 @@ function PreviewScreen({
               <StationCard
                 station={station}
                 members={members}
-                symbol={
-                  PAIR_SYMBOLS[(station.number - 1) % PAIR_SYMBOLS.length]
-                }
                 key={`${round.number}-${station.number}`}
                 compact
               />
@@ -3161,12 +3155,10 @@ function PreviewScreen({
 function StationCard({
   station,
   members,
-  symbol,
   compact = false,
 }: {
   station: Station;
   members: TeamMember[];
-  symbol?: string;
   compact?: boolean;
 }) {
   const appearance = getPairAppearance(station.number);
@@ -3174,20 +3166,14 @@ function StationCard({
     return (
       <article
         className={`station-card conversation-card break-card${compact ? " compact-station" : ""}`}
-        style={{
-          background: appearance.background,
-          color: appearance.foreground,
-        }}
       >
-        {symbol && <PairSymbol symbol={symbol} />}
         <div className="station-content">
-          <span className="station-kind">BREAK</span>
+          <span className="station-kind">ON A BREAK</span>
           <ul className="conversation-name-list">
             {station.participantIds.map((id) => (
               <li key={id}>{nameOf(members, id)}</li>
             ))}
           </ul>
-          <small>{station.activity}</small>
         </div>
       </article>
     );
@@ -3199,7 +3185,6 @@ function StationCard({
         color: appearance.foreground,
       }}
     >
-      {symbol && <PairSymbol symbol={symbol} />}
       <div className="station-content">
         <ul className="conversation-name-list">
           {station.participantIds.map((id) => (
@@ -3331,11 +3316,6 @@ function RoundScreen({
           </div>
         </div>
         <div className="icebreaker-block">
-          {isFinding ? (
-            <Smartphone size={20} />
-          ) : (
-            <MessageSquareText size={20} />
-          )}
           <div>
             <span>
               {isFinding
@@ -3368,8 +3348,7 @@ function RoundScreen({
           </button>
         )}
       </div>
-      {(paused || !!round.sameTeamPairs?.length ||
-        round.stations.some((station) => station.kind === "break")) && (
+      {(paused || !!round.sameTeamPairs?.length) && (
         <div className="round-status">
           {paused && (
             <div className="paused-banner" role="status">
@@ -3380,11 +3359,6 @@ function RoundScreen({
           {!!round.sameTeamPairs?.length && (
             <div className="warning-banner" role="status">
               <HelpCircle size={14} /> This saved round includes same-team pairings.
-            </div>
-          )}
-          {round.stations.some((station) => station.kind === "break") && (
-            <div className="warning-banner" role="status">
-              <HelpCircle size={14} /> Break cards show who rests this round.
             </div>
           )}
         </div>
@@ -3403,7 +3377,6 @@ function RoundScreen({
           <StationCard
             station={station}
             members={session.participants ?? members}
-            symbol={PAIR_SYMBOLS[(station.number - 1) % PAIR_SYMBOLS.length]}
             key={`${round.number}-${station.number}`}
           />
         ))}
@@ -3470,7 +3443,6 @@ function MovementScreen({
           <StationCard
             station={station}
             members={session.participants ?? members}
-            symbol={PAIR_SYMBOLS[(station.number - 1) % PAIR_SYMBOLS.length]}
             key={`${nextRound.number}-${station.number}`}
             compact
           />
