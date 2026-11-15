@@ -21,6 +21,29 @@ function request(method: string, url: string, body?: unknown): Request {
 }
 
 describe("temporary shared room", () => {
+  it("retains signup roles for phone and manually added participants", async () => {
+    const store = new MemoryRoomStore();
+    const created = await handleRoomRequest(
+      request("POST", "", { action: "create" }), store, 1_000,
+    );
+    const { code, hostSecret } = await created.json();
+    for (const action of ["join", "add-manual"]) {
+      const response = await handleRoomRequest(request("POST", "", {
+        action, code, hostSecret, displayName: "Alex Roberts",
+        team: "App team", role: "Director of design",
+      }), store, 2_000);
+      expect(response.status).toBe(201);
+      expect((await response.json()).participant).toMatchObject({
+        team: "App team", role: "Director of design",
+      });
+    }
+    const invalid = await handleRoomRequest(request("POST", "", {
+      action: "join", code, displayName: "Sam Test", role: "Unknown role",
+    }), store, 2_000);
+    expect(invalid.status).toBe(400);
+    expect((await invalid.json()).error).toBe("Choose a role from the list.");
+  });
+
   it("lets the host add participants after phone signup closes", async () => {
     const store = new MemoryRoomStore();
     const created = await handleRoomRequest(

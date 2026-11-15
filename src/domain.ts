@@ -23,6 +23,7 @@ export interface TeamMember {
   id: string;
   displayName: string;
   team?: string;
+  role?: string;
   identity?: ParticipantIdentity;
   avatarId: string;
   isActive: boolean;
@@ -121,7 +122,23 @@ export interface StoredAppData {
   soundVolume: number;
 }
 
-export const APP_NAME = "Connection Pending";
+export const APP_NAME = "Speed Meetings";
+export const SIGNUP_TEAMS = [
+  "AI talk team",
+  "Design system team",
+  "Web purchase team",
+  "Web inLife team",
+  "App team",
+  "Hive",
+  "Solver team",
+  "UX research and Service design",
+] as const;
+export const SIGNUP_ROLES = [
+  "Product designer",
+  "Lead designer",
+  "Senior designer",
+  "Director of design",
+] as const;
 export const ORGANISER_NAME = "Kerry M";
 
 const timestamp = "2026-01-01T00:00:00.000Z";
@@ -196,17 +213,13 @@ export const DEFAULT_SETTINGS: SessionSettings = {
   categories: [
     "Light and fun",
     "Getting to know you",
-    "Work and collaboration",
-    "Creative challenges",
-    "Future and aspirations",
-    "Team improvement",
   ],
   soundEnabled: true,
   soundVolume: 0.45,
   introEnabled: false,
   outroEnabled: true,
   organiserParticipates: false,
-  oddAttendanceMode: "trio",
+  oddAttendanceMode: "break",
   autoAdvance: true,
   rememberAttendance: true,
   highContrast: false,
@@ -317,11 +330,84 @@ const questionRows: [IcebreakerCategory, string][] = [
   ["Creative challenges", "Invent a friendly robot to improve the office."],
 ];
 
-export const DEFAULT_QUESTIONS: IcebreakerQuestion[] = questionRows.map(
+export const LEGACY_QUESTIONS: IcebreakerQuestion[] = questionRows.map(
   ([category, prompt], index) => ({
     id: `question-${index + 1}`,
     prompt,
     category,
+    enabled: true,
+    custom: false,
+  }),
+);
+
+const funQuestionPrompts = [
+  "What is your favourite sandwich?",
+  "What is your favourite colour?",
+  "Where would you go on your dream holiday?",
+  "What is your favourite film?",
+  "What song always puts you in a good mood?",
+  "What is your favourite pizza topping?",
+  "What is your favourite ice cream flavour?",
+  "Tea, coffee, or something else?",
+  "What is your favourite breakfast?",
+  "What is your favourite TV show?",
+  "Beach, city, or countryside holiday?",
+  "What is your favourite snack?",
+  "What film could you watch again and again?",
+  "What is your go-to karaoke song?",
+  "What is your favourite animal?",
+  "What is your favourite season?",
+  "What is your favourite biscuit?",
+  "What is your favourite takeaway?",
+  "What is your favourite board game?",
+  "What is your favourite thing to put on toast?",
+  "What is your favourite way to spend a Sunday?",
+  "What is your favourite dessert?",
+  "What is your favourite place for a day out?",
+  "What is your favourite smell?",
+  "What is your favourite fruit?",
+  "What is your favourite chocolate bar?",
+  "What is your favourite type of music?",
+  "What is your favourite cartoon?",
+  "What is your favourite soup?",
+  "What is your favourite holiday activity?",
+  "Cats, dogs, or another animal?",
+  "Sweet popcorn or salty popcorn?",
+  "What is your favourite pasta dish?",
+  "What is your favourite book?",
+  "What is your favourite video game?",
+  "What is your favourite thing to cook?",
+  "What is your favourite park or outdoor spot?",
+  "What is your favourite cheese?",
+  "What is your favourite sandwich filling combination?",
+  "What is your favourite rainy-day activity?",
+  "What is your favourite hot drink?",
+  "What is your favourite cold drink?",
+  "What is your favourite musical instrument to listen to?",
+  "What is your favourite comedy?",
+  "What is your favourite cake?",
+  "What is your favourite thing about summer?",
+  "What is your favourite thing about winter?",
+  "What is your favourite fictional character?",
+  "What is your favourite kind of potato?",
+  "What is your favourite thing to order at a cafe?",
+  "What is your favourite flower or plant?",
+  "What song would you put on a road-trip playlist?",
+  "What is your favourite thing to do on holiday?",
+  "What is your favourite place to go for a walk?",
+  "What is your favourite animated film?",
+  "What is your favourite party food?",
+  "What is your favourite fairground ride?",
+  "What is your favourite way to eat eggs?",
+  "What is your favourite museum or attraction?",
+  "What is your favourite sound?",
+];
+
+export const DEFAULT_QUESTIONS: IcebreakerQuestion[] = funQuestionPrompts.map(
+  (prompt, index) => ({
+    id: `question-${index + 1}`,
+    prompt,
+    category: index % 2 === 0 ? "Light and fun" : "Getting to know you",
     enabled: true,
     custom: false,
   }),
@@ -479,8 +565,27 @@ export function generateRounds(
   return rounds;
 }
 
+export function canMeet(
+  first: { team?: string; role?: string },
+  second: { team?: string; role?: string },
+  allowSameTeam = false,
+): boolean {
+  const normalize = (value?: string) =>
+    value?.trim().replace(/\s+/g, " ").toLocaleLowerCase() ?? "";
+  const firstTeam = normalize(first.team);
+  if (!allowSameTeam && firstTeam && firstTeam === normalize(second.team)) return false;
+  const firstRole = normalize(first.role);
+  const secondRole = normalize(second.role);
+  const isDirector = (role: string) =>
+    role === "director of design" || role === "design director";
+  return !(
+    (isDirector(firstRole) && /\blead\b/.test(secondRole)) ||
+    (isDirector(secondRole) && /\blead\b/.test(firstRole))
+  );
+}
+
 export function generateMeetupRounds(
-  attendees: { id: string; team?: string }[],
+  attendees: { id: string; team?: string; role?: string }[],
   requestedRounds: number,
   random: () => number = Math.random,
 ): Round[] {
@@ -488,18 +593,15 @@ export function generateMeetupRounds(
     ...new Map(attendees.map((person) => [person.id, person])).values(),
   ];
   if (people.length < 2 || requestedRounds < 1) return [];
-  const teams = new Map(
-    people.map((person) => [
-      person.id,
-      person.team?.trim().toLocaleLowerCase() ?? "",
-    ]),
-  );
+  const byId = new Map(people.map((person) => [person.id, person]));
+  const breakCounts = new Map(people.map((person) => [person.id, 0]));
   const history = new Set<string>();
-  const sameTeam = (first: string, second: string) =>
-    !!teams.get(first) && teams.get(first) === teams.get(second);
-  const teamWeight = people.length * requestedRounds + 1;
+  const eligible = (first: string, second: string, allowSameTeam = false) =>
+    canMeet(byId.get(first)!, byId.get(second)!, allowSameTeam) &&
+    !history.has(pairKey(first, second));
+  const constraintWeight = people.length * requestedRounds + 1;
   const score = (ids: string[]) =>
-    ids.reduce(
+    ids.length === 1 ? breakCounts.get(ids[0])! : ids.reduce(
       (total, first, index) =>
         total +
         ids
@@ -507,8 +609,7 @@ export function generateMeetupRounds(
           .reduce(
             (subtotal, second) =>
               subtotal +
-              Number(sameTeam(first, second)) * teamWeight +
-              Number(history.has(pairKey(first, second))),
+              Number(!eligible(first, second)) * constraintWeight,
             0,
           ),
       0,
@@ -519,9 +620,16 @@ export function generateMeetupRounds(
       people.map((person) => person.id),
       random,
     );
+    let breakId: string | undefined;
+    if (remaining.length % 2 === 1) {
+      const fewestBreaks = Math.min(...remaining.map((id) => breakCounts.get(id)!));
+      const index = remaining.findIndex((id) => breakCounts.get(id) === fewestBreaks);
+      [breakId] = remaining.splice(index, 1);
+    }
     const groups: string[][] = [];
     while (remaining.length)
-      groups.push(remaining.splice(0, remaining.length === 3 ? 3 : 2));
+      groups.push(remaining.splice(0, 2));
+    if (breakId) groups.push([breakId]);
     let improved = true;
     while (improved) {
       improved = false;
@@ -568,28 +676,69 @@ export function generateMeetupRounds(
         improved = true;
       }
     }
-    const repeatedPairs: string[][] = [];
-    const sameTeamPairs: string[][] = [];
+    breakId = groups.find((group) => group.length === 1)?.[0];
+    const validGroups: string[][] = [];
     for (const group of groups) {
+      if (group.length === 1) continue;
+      const partitions: string[][] = [];
+      for (const id of group) {
+        const target = partitions.find((part) =>
+          part.every((other) => eligible(id, other)),
+        );
+        if (target) target.push(id);
+        else partitions.push([id]);
+      }
+      validGroups.push(...partitions);
+    }
+    const mergeUnmatched = (allowSameTeam: boolean) => {
+      for (let index = 0; index < validGroups.length; index += 1) {
+        const group = validGroups[index];
+        if (group.length !== 1) continue;
+        const canJoin = (other: string[], otherIndex: number) =>
+          otherIndex !== index &&
+          other.every((id) => eligible(group[0], id, allowSameTeam));
+        const target = validGroups.find((other, otherIndex) =>
+          other.length === 1 && canJoin(other, otherIndex),
+        );
+        if (target) {
+          target.push(group[0]);
+          group.length = 0;
+        }
+      }
+    };
+    mergeUnmatched(false);
+    mergeUnmatched(true);
+    const finalGroups = validGroups.filter((group) => group.length > 0);
+    if (breakId) finalGroups.push([breakId]);
+    const sameTeamPairs: string[][] = [];
+    for (const group of finalGroups) {
+      if (group.length === 1)
+        breakCounts.set(group[0], breakCounts.get(group[0])! + 1);
       group.forEach((first, index) =>
         group.slice(index + 1).forEach((second) => {
-          const key = pairKey(first, second);
-          if (history.has(key)) repeatedPairs.push([first, second]);
-          if (sameTeam(first, second)) sameTeamPairs.push([first, second]);
-          history.add(key);
+          if (!canMeet(byId.get(first)!, byId.get(second)!))
+            sameTeamPairs.push([first, second]);
+          history.add(pairKey(first, second));
         }),
       );
     }
     rounds.push({
       number: roundIndex + 1,
-      stations: groups.map((participantIds, index) => ({
+      stations: finalGroups.map((participantIds, index) => ({
         number: index + 1,
         participantIds,
         stayingId: participantIds[0],
         movingIds: participantIds.slice(1),
-        kind: participantIds.length === 3 ? "trio" : "pair",
+        kind: participantIds.length === 1 ? "break" : "pair",
+        ...(participantIds.length === 1
+          ? {
+              activity: participantIds[0] === breakId
+                ? "Your turn for a short break. Enjoy a breather while others chat."
+                : "No new eligible match this round.",
+            }
+          : {}),
       })),
-      repeatedPairs,
+      repeatedPairs: [],
       sameTeamPairs,
     });
   }

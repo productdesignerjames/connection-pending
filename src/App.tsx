@@ -30,6 +30,8 @@ import BusinessPeopleArt from "./components/BusinessPeopleArt";
 import IntroMusicButton from "./components/IntroMusicButton";
 import {
   APP_NAME,
+  SIGNUP_TEAMS,
+  SIGNUP_ROLES,
   DEFAULT_QUESTIONS,
   DEFAULT_TEAM,
   ORGANISER_NAME,
@@ -161,6 +163,7 @@ function App() {
   const [phoneName, setPhoneName] = useState("");
   const [phoneSurname, setPhoneSurname] = useState("");
   const [phoneTeam, setPhoneTeam] = useState("");
+  const [phoneRole, setPhoneRole] = useState("");
   const [phoneParticipantId, setPhoneParticipantId] = useState(() =>
     initialRoomCode
       ? (sessionStorage.getItem(`meetup.phone.${initialRoomCode}`) ?? "")
@@ -263,6 +266,7 @@ function App() {
     if (!initialRoomCode || !phoneParticipantId) return;
     try {
       setPhoneView(await readPhoneRoom(initialRoomCode, phoneParticipantId));
+      setError("");
     } catch (reason) {
       setPhoneView(null);
       setError(
@@ -633,6 +637,10 @@ function App() {
       setError("Enter your surname to join.");
       return;
     }
+    if (!phoneTeam || !phoneRole) {
+      setError("Choose your team and role to join.");
+      return;
+    }
     setPhoneBusy(true);
     setError("");
     try {
@@ -642,6 +650,7 @@ function App() {
         initialRoomCode,
         `${firstName} ${surname}`,
         phoneTeam,
+        phoneRole,
       );
       setPhoneParticipantId(result.participant.id);
       sessionStorage.setItem(
@@ -674,6 +683,7 @@ function App() {
         id: participant.id,
         displayName: participant.displayName,
         team: participant.team,
+        role: participant.role,
         avatarId: `${avatar.palette}-${avatar.pattern}`,
         isActive: true,
         isOrganiser: false,
@@ -684,7 +694,7 @@ function App() {
     const settings = {
       ...data.settings,
       rounds: Math.min(data.settings.rounds, participants.length - 1),
-      oddAttendanceMode: "trio" as const,
+      oddAttendanceMode: "break" as const,
     };
     const sessionOrder = shuffle(
       participants.map((participant) => participant.id),
@@ -736,7 +746,7 @@ function App() {
       setRoomBusy(false);
     }
   }
-  async function addManualParticipant(displayName: string, team: string) {
+  async function addManualParticipant(displayName: string, team: string, role: string) {
     if (!roomCode || !hostSecret) return false;
     setRoomBusy(true);
     setError("");
@@ -747,6 +757,7 @@ function App() {
           hostSecret,
           displayName,
           team,
+          role,
         ),
       );
       return true;
@@ -1244,11 +1255,13 @@ function App() {
             name={phoneName}
             surname={phoneSurname}
             team={phoneTeam}
+            role={phoneRole}
             busy={phoneBusy}
             error={error}
             onNameChange={setPhoneName}
             onSurnameChange={setPhoneSurname}
             onTeamChange={setPhoneTeam}
+            onRoleChange={setPhoneRole}
             onSubmit={() => void submitPhoneJoin()}
           />
         )}
@@ -1277,6 +1290,9 @@ function App() {
         {screen === "room-setup" && (
           <RoomSetupScreen
             settings={data.settings}
+            categories={categories.filter((category) =>
+              data.questions.some((question) => question.category === category),
+            )}
             busy={roomBusy}
             onUpdate={updateSetting}
             onCreate={() => void startFromWelcome()}
@@ -1768,7 +1784,9 @@ function App() {
                   )}
                 </form>
                 <div className="question-groups">
-                  {categories.map((category) => (
+                  {categories.filter((category) =>
+                    data.questions.some((question) => question.category === category),
+                  ).map((category) => (
                     <div className="question-group" key={category}>
                       <h3>
                         {category}
@@ -2295,12 +2313,14 @@ function SessionDashboard({
 
 function RoomSetupScreen({
   settings,
+  categories,
   busy,
   onUpdate,
   onCreate,
   onBack,
 }: {
   settings: SessionSettings;
+  categories: IcebreakerCategory[];
   busy: boolean;
   onUpdate: <K extends keyof SessionSettings>(
     key: K,
@@ -2449,10 +2469,10 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
       <div className="game-title-copy">
         <div className="welcome-brand">
           <img
-            src="/connection-pending-logo.svg"
+            src="/speed-meetings-logo.svg"
             width={48}
             height={48}
-            alt="Connection Pending logo"
+            alt={`${APP_NAME} logo`}
           />
           <p className="game-overline">TEAM NETWORKING</p>
         </div>
@@ -2491,7 +2511,7 @@ function RoomLobbyScreen({
   busy: boolean;
   settings: SessionSettings;
   onMeetCountChange: (count: number) => void;
-  onAddParticipant: (displayName: string, team: string) => Promise<boolean>;
+  onAddParticipant: (displayName: string, team: string, role: string) => Promise<boolean>;
   onExtendSignup: () => void;
   onStart: () => void;
   onClose: () => void;
@@ -2499,6 +2519,7 @@ function RoomLobbyScreen({
   const [copied, setCopied] = useState(false);
   const [manualName, setManualName] = useState("");
   const [manualTeam, setManualTeam] = useState("");
+  const [manualRole, setManualRole] = useState("");
   const availablePeople = Math.min(
     40,
     room.participants.length >= MIN_ROOM_PARTICIPANTS
@@ -2602,6 +2623,9 @@ function RoomLobbyScreen({
               <Plus size={15} /> Add 1 minute
             </button>
           </div>
+          <div className="room-lobby-dancers" aria-hidden="true">
+            <BusinessPeopleArt />
+          </div>
         </section>
         <section className="room-attendees-panel">
           <div className="room-attendees-heading">
@@ -2636,10 +2660,11 @@ function RoomLobbyScreen({
             className="room-manual-add"
             onSubmit={(event) => {
               event.preventDefault();
-              void onAddParticipant(manualName, manualTeam).then((added) => {
+              void onAddParticipant(manualName, manualTeam, manualRole).then((added) => {
                 if (!added) return;
                 setManualName("");
                 setManualTeam("");
+                setManualRole("");
               });
             }}
           >
@@ -2658,20 +2683,37 @@ function RoomLobbyScreen({
               />
             </label>
             <label>
-              <span>TEAM (OPTIONAL)</span>
-              <input
-                type="text"
+              <span>TEAM</span>
+              <select
                 value={manualTeam}
                 onChange={(event) => setManualTeam(event.target.value)}
-                placeholder="Team name"
-                maxLength={50}
+                required
                 disabled={busy}
-              />
+              >
+                <option value="">Choose team</option>
+                {SIGNUP_TEAMS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>ROLE</span>
+              <select
+                value={manualRole}
+                onChange={(event) => setManualRole(event.target.value)}
+                required
+                disabled={busy}
+              >
+                <option value="">Choose role</option>
+                {SIGNUP_ROLES.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
             </label>
             <button
               className="secondary-button"
               type="submit"
-              disabled={busy || manualName.trim().length < 2}
+              disabled={busy || manualName.trim().length < 2 || !manualTeam || !manualRole}
             >
               Add person
             </button>
@@ -2698,7 +2740,7 @@ function RoomLobbyScreen({
           </div>
           {room.participants.length % 2 === 1 && (
             <p className="odd-attendance-note">
-              A group of three will meet each round so nobody sits out.
+              One person takes a break each round. The break rotates so it is not always the same person.
             </p>
           )}
         </section>
@@ -2712,22 +2754,26 @@ function PhoneJoinScreen({
   name,
   surname,
   team,
+  role,
   busy,
   error,
   onNameChange,
   onSurnameChange,
   onTeamChange,
+  onRoleChange,
   onSubmit,
 }: {
   code: string;
   name: string;
   surname: string;
   team: string;
+  role: string;
   busy: boolean;
   error: string;
   onNameChange: (value: string) => void;
   onSurnameChange: (value: string) => void;
   onTeamChange: (value: string) => void;
+  onRoleChange: (value: string) => void;
   onSubmit: () => void;
 }) {
   return (
@@ -2765,15 +2811,30 @@ function PhoneJoinScreen({
             autoComplete="family-name"
             required
           />
-          <label htmlFor="phone-team">Team (optional)</label>
-          <input
+          <label htmlFor="phone-team">Team</label>
+          <select
             id="phone-team"
             value={team}
             onChange={(event) => onTeamChange(event.target.value)}
-            placeholder="e.g. Marketing"
-            maxLength={50}
-            autoComplete="off"
-          />
+            required
+          >
+            <option value="">Choose your team</option>
+            {SIGNUP_TEAMS.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+          <label htmlFor="phone-role">Role</label>
+          <select
+            id="phone-role"
+            value={role}
+            onChange={(event) => onRoleChange(event.target.value)}
+            required
+          >
+            <option value="">Choose your role</option>
+            {SIGNUP_ROLES.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
           {error && (
             <p className="phone-error" role="alert">
               {error}
@@ -2782,7 +2843,7 @@ function PhoneJoinScreen({
           <button
             className="primary-button"
             type="submit"
-            disabled={busy || name.trim().length < 2 || !surname.trim()}
+            disabled={busy || name.trim().length < 2 || !surname.trim() || !team || !role}
           >
             {busy ? "Joining…" : "Join session"}
           </button>
@@ -2813,7 +2874,9 @@ function PhoneAssignmentScreen({
         <section className="phone-waiting">
           <p className="section-kicker">YOU ARE CHECKED IN</p>
           <h1>{view.participant.displayName}</h1>
-          <span className="phone-waiting-pulse" />
+          <div className="phone-waiting-art" aria-hidden="true">
+            <BusinessPeopleArt pairIndex={view.participantCount} />
+          </div>
           <h2>Waiting for the host</h2>
           <p>{view.participantCount} people are in the room.</p>
           <div className="phone-countdown">
@@ -2833,6 +2896,9 @@ function PhoneAssignmentScreen({
         <section className="phone-waiting">
           <p className="section-kicker">CONNECTIONS MADE</p>
           <h1>Thanks, {view.participant.displayName}.</h1>
+          <div className="phone-celebration-art" aria-hidden="true">
+            <BusinessPeopleArt />
+          </div>
           <p>Your session is complete. You can close this page.</p>
         </section>
       </main>
@@ -2842,6 +2908,7 @@ function PhoneAssignmentScreen({
     view.phase === "movement" ||
     (view.phase === "paused" && view.previousPhase === "movement");
   const assignment = view.assignment;
+  const isBreak = !!assignment?.break;
   const isFinding =
     isMovement ||
     view.phase === "intro" ||
@@ -2849,6 +2916,11 @@ function PhoneAssignmentScreen({
   const isConversation =
     view.phase === "conversation" ||
     (view.phase === "paused" && view.previousPhase === "conversation");
+  const countdownLabel = isFinding
+    ? isBreak ? "YOUR BREAK STARTS IN" : "CONVERSATION STARTS IN"
+    : isBreak
+      ? view.currentRound + 1 === view.totalRounds ? "SESSION ENDS IN" : "NEXT ROUND IN"
+      : "TIME LEFT";
   return (
     <main
       className="phone-page phone-live-page"
@@ -2865,50 +2937,53 @@ function PhoneAssignmentScreen({
         </span>
       </div>
       <section className="phone-assignment">
-        <p className="section-kicker">
-          {isFinding ? "FIND YOUR PERSON" : "YOUR CONVERSATION"}
-        </p>
-        <PairSymbol
-          symbol={assignment?.symbol ?? "Star"}
-          className="phone-symbol"
-        />
-        <p className="phone-greeting">
-          {view.participant.displayName},{" "}
-          {isFinding ? "find" : "you are meeting"}
-        </p>
-        <h1>
-          {assignment?.break
-            ? "Take a short break"
-            : assignment?.partnerNames.length
-              ? assignment.partnerNames.join(" + ")
-              : "Your group is getting ready"}
-        </h1>
-        <p className="phone-match-instruction">
-          {assignment?.break
-            ? "You are sitting out this round. You will be matched next round."
-            : isFinding
-              ? "Find the person named above. Your phones should show the same colour and icon."
-              : "Use this question to get your conversation started."}
-        </p>
+        <div className="phone-round-heading">
+          <div className="phone-round-dancers" aria-hidden="true">
+            {isBreak
+              ? <BusinessPeopleArt single />
+              : <BusinessPeopleArt pairIndex={view.assignmentRound * 2 + (isFinding ? 0 : 1)} />}
+          </div>
+          <p className="section-kicker">
+            {isBreak ? "YOUR BREAK" : isFinding ? "FIND YOUR PERSON" : "YOUR CONVERSATION"}
+          </p>
+        </div>
+        <div className="phone-partner">
+          {!isBreak && <p className="phone-greeting">
+            <strong>{view.participant.displayName.split(" ")[0]}</strong>
+            <span>{isFinding ? "find" : "you are meeting"}</span>
+          </p>}
+          <h1>
+            {assignment?.break
+              ? "Take a short break"
+              : assignment?.partnerNames.length
+                ? assignment.partnerNames.join(" + ")
+                : "Your group is getting ready"}
+          </h1>
+          {(isBreak || isFinding || !view.question) && (
+            <p className="phone-match-instruction">
+              {assignment?.break
+                ? (assignment.activity ?? "Take a breather while others chat.")
+                : isFinding
+                  ? "Find the person named above. Your phones show the same colour."
+                  : "Enjoy your conversation together."}
+            </p>
+          )}
+        </div>
         {isConversation && view.question && !assignment?.break && (
           <div className="phone-icebreaker">
             <p className="section-kicker">
-              ICEBREAKER · {view.question.category.toUpperCase()}
+              ICEBREAKER
             </p>
             <p>{view.question.prompt}</p>
           </div>
         )}
         <div className="phone-countdown">
-          <span>{isFinding ? "CONVERSATION STARTS IN" : "TIME LEFT"}</span>
-          <strong>{formatClock(remaining)}</strong>
-          {view.phase === "paused" && <em>PAUSED</em>}
+          <div className="phone-clock">
+            <span>{countdownLabel}</span>
+            <strong>{formatClock(remaining)}</strong>
+            {view.phase === "paused" && <em>PAUSED</em>}
+          </div>
         </div>
-        {view.phase === "conversation" && view.assignment && (
-          <p className="phone-prompt-note">
-            Look for this symbol on the room screen:{" "}
-            <b>{view.assignment.symbol}</b>
-          </p>
-        )}
         <button className="phone-rejoin" type="button" onClick={onRejoin}>
           Not you? Change name
         </button>
@@ -3096,7 +3171,7 @@ function StationCard({
       >
         {symbol && <PairSymbol symbol={symbol} />}
         <div className="station-content">
-          <span className="station-kind">PAUSE</span>
+          <span className="station-kind">BREAK</span>
           <ul className="conversation-name-list">
             {station.participantIds.map((id) => (
               <li key={id}>{nameOf(members, id)}</li>
@@ -3237,19 +3312,27 @@ function RoundScreen({
       >
         <span style={{ width: `${progress}%` }} />
       </div>
+      <h2 className="round-action-heading">
+        {isFinding ? "Find your person." : "It’s conversation time."}
+      </h2>
       <div className="round-focus">
         <div className="timer-block">
-          <span>{isFinding ? "FIND YOUR PERSON" : "TIME TO CONNECT"}</span>
-          <strong className={remaining < 30_000 ? "timer-urgent" : ""}>
-            {formatClock(remaining)}
-          </strong>
-          <small>
-            {paused
-              ? "PAUSED"
-              : isFinding
-                ? "CONVERSATION STARTS AFTER THE COUNTDOWN"
-                : "CONVERSATION IN PROGRESS"}
-          </small>
+          <div className="session-timer-face">
+            <span>{isFinding ? "FIND YOUR PERSON" : "CONVERSATION TIME"}</span>
+            <strong className={remaining < 30_000 ? "timer-urgent" : ""}>
+              {formatClock(remaining)}
+            </strong>
+            <small>
+              {paused
+                ? "PAUSED"
+                : isFinding
+                  ? "CONVERSATION STARTS IN"
+                  : "TIME LEFT"}
+            </small>
+          </div>
+          <div className="timer-people" aria-hidden="true">
+            <BusinessPeopleArt pairIndex={(round.number - 1) * 2 + (isFinding ? 0 : 1)} />
+          </div>
         </div>
         <div className="icebreaker-block">
           {isFinding ? (
@@ -3260,7 +3343,7 @@ function RoundScreen({
           <div>
             <span>
               {isFinding
-                ? "CHECK YOUR PHONE"
+                ? "FIND YOUR GROUP"
                 : round.question
                   ? `ICEBREAKER · ${round.question.category}`
                   : "YOUR CONVERSATION"}
@@ -3297,8 +3380,14 @@ function RoundScreen({
       )}
       {!!round.sameTeamPairs?.length && (
         <div className="warning-banner" role="status">
-          <HelpCircle size={17} /> Some same-team conversations were unavoidable
-          with this attendance.
+          <HelpCircle size={17} /> Some same-team conversations are included as a last resort
+          because no new cross-team match was available.
+        </div>
+      )}
+      {round.stations.some((station) => station.kind === "break") && (
+        <div className="warning-banner" role="status">
+          <HelpCircle size={17} /> People shown in a break card sit out this round.
+          Odd-numbered breaks rotate; repeat and director–lead matches remain excluded.
         </div>
       )}
       <div className="station-grid-heading">
@@ -3348,13 +3437,21 @@ function MovementScreen({
             ROUND {session.currentRound + 1} COMPLETE
           </p>
           <h1>Find your next person.</h1>
+          <p className="movement-instruction">
+            Find your name below, then meet the people in your group.
+          </p>
         </div>
         <div className="movement-timer">
-          <span>ROUND STARTS IN</span>
-          <strong>{formatClock(remaining)}</strong>
-          <small>
-            {session.timer.phase === "paused" ? "PAUSED" : "GET READY"}
-          </small>
+          <div className="session-timer-face">
+            <span>ROUND STARTS IN</span>
+            <strong>{formatClock(remaining)}</strong>
+            <small>
+              {session.timer.phase === "paused" ? "PAUSED" : "GET READY"}
+            </small>
+          </div>
+          <div className="timer-people" aria-hidden="true">
+            <BusinessPeopleArt pairIndex={(session.currentRound + 1) * 2} />
+          </div>
         </div>
       </div>
       <div className="progress-track">

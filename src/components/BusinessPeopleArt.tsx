@@ -295,10 +295,16 @@ function drawPerson(
   rect(ink, 12, top + 8, 2, 1);
 }
 
-export default function BusinessPeopleArt({ single = false }: { single?: boolean }) {
+export default function BusinessPeopleArt({
+  single = false,
+  pairIndex,
+}: {
+  single?: boolean;
+  pairIndex?: number;
+}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [characterIndex] = useState(() => Math.floor(Math.random() * people.length));
-  const logicalWidth = single ? 24 : 168;
+  const logicalWidth = pairIndex !== undefined ? 48 : single ? 24 : 168;
   useEffect(() => {
     const context = canvas.current?.getContext("2d");
     if (!context) return;
@@ -308,7 +314,10 @@ export default function BusinessPeopleArt({ single = false }: { single?: boolean
     let frame = 0;
     const paint = (timestamp: number) => {
       context.clearRect(0, 0, logicalWidth, 64);
-      const selectedPeople = single ? [people[characterIndex]] : people;
+      const firstPairIndex = pairIndex === undefined ? 0 : (pairIndex * 2) % people.length;
+      const selectedPeople = pairIndex !== undefined
+        ? [people[firstPairIndex], people[(firstPairIndex + 1) % people.length]]
+        : single ? [people[characterIndex]] : people;
       selectedPeople.forEach((person, index) => {
         const phase = motionPreference.matches ? null : timestamp / 350 + index * 0.8;
         const dance = phase === null ? 0 : Math.sin(phase);
@@ -337,17 +346,17 @@ export default function BusinessPeopleArt({ single = false }: { single?: boolean
       window.cancelAnimationFrame(frame);
       motionPreference.removeEventListener("change", start);
     };
-  }, [single, characterIndex, logicalWidth]);
+  }, [single, characterIndex, logicalWidth, pairIndex]);
   return (
     <canvas
       ref={canvas}
       width={logicalWidth * 3}
       height={192}
-      className={`business-people-art${single ? " single-person-art" : ""}`}
+      className={`business-people-art${pairIndex !== undefined ? " pair-people-art" : single ? " single-person-art" : ""}`}
       role="img"
-      aria-label={single ? `Dancing office character: ${people[characterIndex].kind}` : "Seven playful pixel-art office people of different heights and builds, including a wheelchair user, a pink skirt, a beanie wearer, a punk, and a long-haired person in a loud T-shirt"}
+      aria-label={pairIndex !== undefined ? "Two dancing office characters" : single ? `Dancing office character: ${people[characterIndex].kind}` : "Seven playful pixel-art office people of different heights and builds, including a wheelchair user, a pink skirt, a beanie wearer, a punk, and a long-haired person in a loud T-shirt"}
     >
-      {single ? "One randomly selected dancing office character." : "A varied office group with suits, a skirt, a wheelchair, a pink mohawk, and a deliberately terrible patterned T-shirt."}
+      {pairIndex !== undefined ? "Two dancing office characters." : single ? "One randomly selected dancing office character." : "A varied office group with suits, a skirt, a wheelchair, a pink mohawk, and a deliberately terrible patterned T-shirt."}
     </canvas>
   );
 }

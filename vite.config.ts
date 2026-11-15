@@ -5,7 +5,7 @@ import { handleRoomRequest, MemoryRoomStore } from './src/rooms.js'
 const localRooms = new MemoryRoomStore()
 
 const localRoomApi: Plugin = {
-  name: 'pixel-pairs-local-room-api',
+  name: 'speed-meetings-local-room-api',
   configureServer(server) {
     server.middlewares.use('/.netlify/functions/rooms', async (request, response, next) => {
       try {

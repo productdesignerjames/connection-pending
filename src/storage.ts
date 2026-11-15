@@ -2,6 +2,7 @@ import {
   DEFAULT_QUESTIONS,
   DEFAULT_SETTINGS,
   DEFAULT_TEAM,
+  LEGACY_QUESTIONS,
   type ActiveTimer,
   type IcebreakerCategory,
   type IcebreakerQuestion,
@@ -196,7 +197,42 @@ export function loadStoredData(storage: Storage): {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return { data: createDefaultData(), recovered: false };
     const parsed: unknown = JSON.parse(raw);
-    if (isStoredAppData(parsed)) return { data: parsed, recovered: false };
+    if (isStoredAppData(parsed)) {
+      let updatedQuestions = false;
+      const questions = parsed.questions.map((question) => {
+        const legacy = LEGACY_QUESTIONS.find(({ id }) => id === question.id);
+        const replacement = DEFAULT_QUESTIONS.find(({ id }) => id === question.id);
+        if (
+          !question.custom && legacy && replacement &&
+          question.prompt === legacy.prompt && question.category === legacy.category
+        ) {
+          updatedQuestions = true;
+          return { ...replacement, enabled: question.enabled };
+        }
+        return question;
+      });
+      if (updatedQuestions) {
+        const ids = new Set(questions.map(({ id }) => id));
+        questions.push(...DEFAULT_QUESTIONS.filter(({ id }) => !ids.has(id)));
+      }
+      const selectedCategories = parsed.settings.categories.filter((category) =>
+        questions.some((question) => question.category === category),
+      );
+      return {
+        data: {
+          ...parsed,
+          questions,
+          settings: {
+            ...parsed.settings,
+            oddAttendanceMode: "break",
+            categories: updatedQuestions
+              ? selectedCategories.length ? selectedCategories : DEFAULT_SETTINGS.categories
+              : parsed.settings.categories,
+          },
+        },
+        recovered: false,
+      };
+    }
   } catch {
     // Restore defaults below when storage is unavailable or malformed.
   }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_QUESTIONS, LEGACY_QUESTIONS } from "./domain";
 import {
   createTimer,
   formatClock,
@@ -58,6 +59,30 @@ describe("timestamp timer", () => {
 });
 
 describe("local storage", () => {
+  it("refreshes old built-in prompts while preserving edits, custom prompts, and disabled choices", () => {
+    const storage = new MemoryStorage() as unknown as Storage;
+    const data = createDefaultData();
+    const edited = { ...LEGACY_QUESTIONS[1], prompt: "What is your favourite local cafe?" };
+    const custom = { ...LEGACY_QUESTIONS[0], id: "custom-question", prompt: "What is your favourite noodle dish?", custom: true };
+    data.questions = LEGACY_QUESTIONS.map((question) => ({ ...question }));
+    data.questions[0].enabled = false;
+    data.questions[1] = edited;
+    data.questions.push(custom);
+    data.settings = { ...data.settings, categories: ["Work and collaboration"], oddAttendanceMode: "trio" };
+    storage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+    const loaded = loadStoredData(storage);
+    expect(loaded.recovered).toBe(false);
+    expect(loaded.data.questions[0]).toEqual({ ...DEFAULT_QUESTIONS[0], enabled: false });
+    expect(loaded.data.questions[1]).toEqual(edited);
+    expect(loaded.data.questions).toContainEqual(custom);
+    expect(loaded.data.questions).toContainEqual(DEFAULT_QUESTIONS.at(-1));
+    expect(loaded.data.settings.oddAttendanceMode).toBe("break");
+    expect(loaded.data.settings.categories).toEqual(["Light and fun", "Getting to know you"]);
+    expect(saveStoredData(loaded.data, storage)).toBe(true);
+    expect(loadStoredData(storage).data).toEqual(loaded.data);
+  });
+
   it("does not retain completed QR session participant data", () => {
     const storage = new MemoryStorage() as unknown as Storage;
     const data = createDefaultData();

@@ -3,8 +3,10 @@ import {
   DEFAULT_QUESTIONS,
   DEFAULT_SETTINGS,
   DEFAULT_TEAM,
+  SIGNUP_TEAMS,
   avatarForName,
   calculateDurationSeconds,
+  canMeet,
   generateRounds,
   generateMeetupRounds,
   pairingsForAttendees,
@@ -197,13 +199,60 @@ describe("generateRounds", () => {
 });
 
 describe("team-aware meetup rounds", () => {
+  it.each([1, 42, 2026])(
+    "matches 36 people over eight rounds without restricted or repeat meetings (seed %i)",
+    (seed) => {
+      const people = Array.from({ length: 36 }, (_, index) => ({
+        id: `person-${index}`,
+        team: SIGNUP_TEAMS[index % SIGNUP_TEAMS.length],
+        role: index === 0
+          ? "Director of design"
+          : index <= 4
+            ? "Lead designer"
+            : index % 3 === 0
+              ? "Senior designer"
+              : "Product designer",
+      }));
+      let state = seed;
+      const random = () => {
+        state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+        return state / 2 ** 32;
+      };
+      const rounds = generateMeetupRounds(people, 8, random);
+      const seen = new Set<string>();
+      expect(rounds).toHaveLength(8);
+      for (const round of rounds) {
+        expect(round.stations).toHaveLength(18);
+        expect(round.sameTeamPairs).toEqual([]);
+        expect(round.repeatedPairs).toEqual([]);
+        expect(round.stations.flatMap((station) => station.participantIds).sort())
+          .toEqual(people.map((person) => person.id).sort());
+        for (const station of round.stations) {
+          expect(station.kind).toBe("pair");
+          const [firstId, secondId] = station.participantIds;
+          const first = people.find((person) => person.id === firstId)!;
+          const second = people.find((person) => person.id === secondId)!;
+          expect(first.team).not.toBe(second.team);
+          expect(
+            [first.role, second.role].includes("Director of design") &&
+            [first.role, second.role].includes("Lead designer"),
+          ).toBe(false);
+          const key = [firstId, secondId].sort().join(":");
+          expect(seen.has(key)).toBe(false);
+          seen.add(key);
+        }
+      }
+      expect(seen.size).toBe(144);
+    },
+  );
+
   it("avoids matching balanced teams across every round", () => {
     const people = Array.from({ length: 8 }, (_, index) => ({
       id: `person-${index}`,
       team: index < 4 ? "Sales" : "Design",
     }));
-    const rounds = generateMeetupRounds(people, 6, stableRandom);
-    expect(rounds).toHaveLength(6);
+    const rounds = generateMeetupRounds(people, 4, stableRandom);
+    expect(rounds).toHaveLength(4);
     for (const round of rounds) {
       expect(round.sameTeamPairs).toEqual([]);
       expect(
@@ -213,16 +262,21 @@ describe("team-aware meetup rounds", () => {
     expect(rounds[1].repeatedPairs).toEqual([]);
   });
 
-  it("supports an odd trio with three different teams", () => {
+  it("rotates the odd-person break without creating trios", () => {
     const people = ["Sales", " sales ", "Design", "Design", "Support"].map(
       (team, index) => ({ id: `person-${index}`, team }),
     );
     const rounds = generateMeetupRounds(people, 3, stableRandom);
+    const breaks = new Set<string>();
+    expect(rounds[0].sameTeamPairs).toEqual([]);
     for (const round of rounds) {
-      expect(round.sameTeamPairs).toEqual([]);
-      expect(
-        round.stations.filter((station) => station.kind === "trio"),
-      ).toHaveLength(1);
+      expect(round.stations.filter((station) => station.kind === "trio")).toHaveLength(0);
+      expect(round.stations.filter((station) => station.kind === "pair")).toHaveLength(2);
+      const resting = round.stations.filter((station) => station.kind === "break");
+      expect(resting).toHaveLength(1);
+      expect(breaks.has(resting[0].participantIds[0])).toBe(false);
+      breaks.add(resting[0].participantIds[0]);
+      expect(round.repeatedPairs).toEqual([]);
       expect(
         new Set(round.stations.flatMap((station) => station.participantIds))
           .size,
@@ -230,7 +284,7 @@ describe("team-aware meetup rounds", () => {
     }
   });
 
-  it("minimizes unavoidable same-team matches without dropping people", () => {
+  it("uses same-team matches as a last resort without repeating conversations", () => {
     const people = [
       "Sales",
       " sales ",
@@ -239,13 +293,91 @@ describe("team-aware meetup rounds", () => {
       "Design",
       "Design",
     ].map((team, index) => ({ id: `person-${index}`, team }));
-    for (const round of generateMeetupRounds(people, 4, stableRandom)) {
-      expect(round.sameTeamPairs).toHaveLength(1);
+    const rounds = generateMeetupRounds(people, 4, stableRandom);
+    expect(rounds[0].sameTeamPairs).toHaveLength(1);
+    expect(rounds[0].stations.some((station) => station.kind === "break")).toBe(false);
+    const seen = new Set<string>();
+    for (const round of rounds) {
+      expect(round.repeatedPairs).toEqual([]);
+      for (const station of round.stations) {
+        station.participantIds.forEach((id, index) => {
+          for (const other of station.participantIds.slice(index + 1)) {
+            const key = [id, other].sort().join(":");
+            expect(seen.has(key)).toBe(false);
+            seen.add(key);
+          }
+        });
+      }
       expect(
         new Set(round.stations.flatMap((station) => station.participantIds))
           .size,
       ).toBe(6);
     }
+  });
+
+  it("exhausts cross-team connections before falling back to teammates", () => {
+    const people = [
+      { id: "a1", team: "A" },
+      { id: "a2", team: "A" },
+      { id: "b1", team: "B" },
+      { id: "b2", team: "B" },
+    ];
+    const rounds = generateMeetupRounds(people, 4, stableRandom);
+    expect(rounds.slice(0, 2).map((round) => round.sameTeamPairs)).toEqual([[], []]);
+    expect(rounds[2].sameTeamPairs).toHaveLength(2);
+    expect(rounds[2].stations.every((station) => station.kind === "pair")).toBe(true);
+    expect(rounds[3].stations.every((station) => station.kind === "break")).toBe(true);
+  });
+
+  it("never relaxes the director–lead rule for same-team fallback", () => {
+    const rounds = generateMeetupRounds([
+      { id: "director", team: "App", role: "Director of design" },
+      { id: "lead", team: " app ", role: "Lead designer" },
+    ], 2, stableRandom);
+    expect(rounds.every((round) =>
+      round.stations.every((station) => station.kind === "break"),
+    )).toBe(true);
+  });
+
+  it("never pairs directors with leads", () => {
+    const people = [
+      { id: "director", team: "A", role: "Director of design" },
+      { id: "lead", team: "B", role: "Lead designer" },
+      { id: "senior", team: "C", role: "Senior designer" },
+      { id: "designer", team: "D", role: "Product designer" },
+      { id: "other-lead", team: "E", role: "Lead designer" },
+    ];
+    const seen = new Set<string>();
+    for (const round of generateMeetupRounds(people, 6, stableRandom)) {
+      expect(round.stations.flatMap((station) => station.participantIds).sort())
+        .toEqual(people.map((person) => person.id).sort());
+      for (const station of round.stations) {
+        station.participantIds.forEach((id, index) => {
+          for (const otherId of station.participantIds.slice(index + 1)) {
+            const first = people.find((person) => person.id === id)!;
+            const second = people.find((person) => person.id === otherId)!;
+            expect(canMeet(first, second)).toBe(true);
+            const key = [id, otherId].sort().join(":");
+            expect(seen.has(key)).toBe(false);
+            seen.add(key);
+          }
+        });
+      }
+    }
+    expect(canMeet({ role: " design director " }, { role: " LEAD designer " })).toBe(false);
+    expect(canMeet({ role: "Lead designer" }, { role: "Director of design" })).toBe(false);
+    expect(canMeet({ team: " Design   system " }, { team: "design system" })).toBe(false);
+    expect(canMeet({ role: "Director of design" }, { role: "Product designer" })).toBe(true);
+  });
+
+  it("gives breaks once every eligible new connection is exhausted", () => {
+    const rounds = generateMeetupRounds([
+      { id: "first", team: "A" },
+      { id: "second", team: "B" },
+    ], 2, stableRandom);
+    expect(rounds[0].stations[0].kind).toBe("pair");
+    expect(rounds[1].stations.map((station) => station.kind)).toEqual(["break", "break"]);
+    expect(rounds[1].repeatedPairs).toEqual([]);
   });
 
   it("treats missing team values as unrestricted and handles small rooms", () => {

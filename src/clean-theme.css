@@ -654,34 +654,41 @@ h3 {
 
 .simple-transition-screen .movement-heading h1 {
   margin: 6px 0 0;
-  font-size: 32px;
-  line-height: 1.2;
+  font-size: clamp(36px, 4vw, 56px);
+  line-height: 1.08;
+}
+
+.movement-instruction {
+  margin: 12px 0 0;
+  color: var(--clean-muted);
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .simple-transition-screen .movement-timer {
-  min-width: 154px;
-  padding: 0 0 0 24px;
-  border-left: 1px solid var(--clean-line);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0;
   background: transparent;
   color: var(--clean-ink);
 }
 
 .simple-transition-screen .movement-timer span,
 .simple-transition-screen .movement-timer small {
-  color: var(--clean-muted);
+  color: #f3e7f6;
   font:
-    600 10px/1.4 "Avenir Next",
+    700 11px/1.3 "Avenir Next",
     Avenir,
     sans-serif;
 }
 
 .simple-transition-screen .movement-timer strong {
   margin: 4px 0;
-  color: var(--clean-green);
+  color: var(--clean-lime);
   font:
-    600 40px/1.1 "Avenir Next",
-    Avenir,
-    sans-serif;
+    600 44px/1 var(--mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -714,7 +721,7 @@ h3 {
 .next-conversations-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
-  gap: 16px;
+  gap: 24px;
   align-items: stretch;
 }
 
@@ -732,37 +739,76 @@ h3 {
 
 @media (max-width: 760px) {
   .simple-transition-screen .movement-heading {
+    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
   }
 
   .simple-transition-screen .movement-heading h1 {
-    font-size: 26px;
+    font-size: 36px;
   }
 
   .simple-transition-screen .movement-timer {
-    min-width: 108px;
-    padding-left: 16px;
+    justify-content: flex-start;
   }
+}
 
-  .simple-transition-screen .movement-timer strong {
-    font-size: 32px;
-  }
+.round-action-heading {
+  margin: 24px 0 16px;
+  color: var(--clean-ink);
+  font: 700 clamp(32px, 3.5vw, 48px)/1.1 "Avenir Next", Avenir, sans-serif;
 }
 
 .timer-block {
-  border: 1px solid var(--clean-accent-hover);
-  border-radius: 3px;
-  background: #302e30;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  border: 0;
+  background: transparent;
   box-shadow: none;
+  text-align: center;
 }
 
-.timer-block > span,
-.timer-block > small {
+.session-timer-face {
+  width: 168px;
+  min-height: 168px;
+  flex: 0 0 168px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 5px;
+  padding: 18px;
+  border: 3px solid var(--clean-ink);
+  border-radius: 50%;
+  background: #302e30;
+  box-shadow: 6px 6px 0 var(--clean-coral);
+  text-align: center;
+}
+
+.session-timer-face > span,
+.session-timer-face > small {
   color: #f3e7f6;
+  font: 700 11px/1.3 "Avenir Next", Avenir, sans-serif;
 }
 
-.timer-block strong {
+.timer-people {
+  flex: 0 0 96px;
+}
+
+.timer-people .pair-people-art {
+  width: 96px;
+  height: 128px;
+  max-width: none;
+  aspect-ratio: 3 / 4;
+  margin: 0;
+}
+
+.timer-block strong,
+.focus-mode .timer-block strong {
+  margin: 0;
   color: var(--clean-lime);
+  font-size: 44px;
+  font-variant-numeric: tabular-nums;
   text-shadow: none;
 }
 
@@ -771,10 +817,12 @@ h3 {
 }
 
 .icebreaker-block {
-  border: 1px solid var(--clean-line);
-  border-radius: 3px;
-  background: white;
+  border: 0;
+  border-left: 2px solid var(--clean-line);
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
+  text-align: left;
 }
 
 .icebreaker-block h2 {
@@ -789,7 +837,43 @@ h3 {
 .station-grid-heading h2 {
   color: var(--clean-ink);
   font-family: "Avenir Next", Avenir, sans-serif;
+  font-size: clamp(28px, 2.8vw, 40px);
+  line-height: 1.15;
   text-transform: none;
+}
+
+.station-grid-heading {
+  margin: 36px 0 18px;
+}
+
+.station-grid {
+  gap: 24px;
+}
+
+.station-grid .conversation-name-list li {
+  font-size: 22px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .station-grid-heading h2 {
+    font-size: 28px;
+  }
+
+  .station-grid {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .station-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .station-grid .station-card.conversation-card {
+    padding: 18px 100px 18px 20px;
+  }
 }
 
 .station-grid-heading > span,
@@ -1342,6 +1426,18 @@ h3 {
   gap: 16px;
 }
 
+.room-lobby-dancers {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+.room-lobby-dancers .business-people-art,
+.phone-celebration-art .business-people-art {
+  width: min(252px, 100%);
+  height: auto;
+  margin: 0 auto;
+}
+
 .qr-frame {
   width: 254px;
   height: 254px;
@@ -1501,7 +1597,8 @@ h3 {
   letter-spacing: 0.6px;
 }
 
-.room-manual-add input {
+.room-manual-add input,
+.room-manual-add select {
   width: 100%;
   min-width: 0;
   height: 42px;
@@ -1568,6 +1665,7 @@ h3 {
   border-bottom: 1px solid var(--clean-line);
   color: var(--clean-green);
   font-size: 12px;
+  line-height: 1.4;
   font-weight: 700;
   letter-spacing: 0.6px;
   text-align: center;
@@ -1616,7 +1714,8 @@ h3 {
   font-weight: 600;
 }
 
-.phone-join-content input {
+.phone-join-content input,
+.phone-join-content select {
   width: 100%;
   height: 50px;
   padding: 0 13px;
@@ -1652,14 +1751,22 @@ h3 {
   text-align: center;
 }
 
-.phone-waiting-pulse {
-  width: 44px;
-  height: 44px;
-  display: block;
-  margin: 28px auto 18px;
-  border: 10px solid var(--clean-green-soft);
-  border-radius: 50%;
-  background: var(--clean-green);
+.phone-waiting > .section-kicker {
+  justify-content: center;
+}
+
+.phone-waiting-art,
+.phone-celebration-art {
+  display: flex;
+  justify-content: center;
+  margin: 20px auto 16px;
+}
+
+.phone-waiting-art .business-people-art {
+  width: 72px;
+  height: 96px;
+  aspect-ratio: auto;
+  margin: 0;
 }
 
 .phone-waiting h2 {
@@ -1708,20 +1815,6 @@ h3 {
     sans-serif;
 }
 
-.phone-symbol {
-  width: 108px;
-  height: 108px;
-  display: grid;
-  place-items: center;
-  margin: 22px auto;
-  border: 2px solid #d9e8dc;
-  border-radius: 50%;
-  background: var(--clean-green-soft);
-  color: var(--clean-green);
-  font-size: 58px;
-  line-height: 1;
-}
-
 .phone-greeting {
   margin: 0;
   color: var(--clean-muted);
@@ -1760,16 +1853,6 @@ h3 {
   font-size: 17px;
   font-weight: 600;
   line-height: 1.5;
-}
-
-.phone-prompt-note {
-  color: var(--clean-muted);
-  font-size: 12px;
-}
-
-.phone-prompt-note b {
-  color: var(--clean-green);
-  font-size: 18px;
 }
 
 .phone-rejoin {
@@ -2209,8 +2292,9 @@ h3 {
 .room-setup-toggles .toggle-row {
   min-width: 0;
   min-height: 48px;
+  justify-content: flex-start;
   padding: 8px 0;
-  gap: 10px;
+  gap: 12px;
   border: 0;
 }
 
@@ -2504,10 +2588,23 @@ h3 {
   text-align: center;
   display: grid;
   justify-items: center;
-  gap: 12px;
+  gap: 24px;
   margin-top: auto;
   margin-bottom: auto;
-  padding: 8px 0;
+  padding: 24px 0 8px;
+}
+
+.phone-partner {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.phone-round-heading {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: 100%;
 }
 
 .phone-live-page .phone-brand {
@@ -2520,7 +2617,6 @@ h3 {
 }
 
 .phone-page .phone-waiting > .section-kicker,
-.phone-live-page .phone-assignment > .section-kicker,
 .phone-live-page .phone-assignment p,
 .phone-live-page .phone-assignment h1 {
   width: 100%;
@@ -2531,11 +2627,47 @@ h3 {
   margin: 0;
 }
 
+.phone-live-page .phone-round-heading > .section-kicker {
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.phone-live-page .phone-icebreaker {
+  padding: 18px;
+  text-align: left;
+  border-radius: 8px;
+}
+
+.phone-live-page .phone-assignment .phone-icebreaker p {
+  text-align: left;
+}
+
 .phone-live-page .phone-assignment h1 {
   margin: 0;
-  font-size: 32px;
+  font-size: 40px;
   line-height: 1.15;
   overflow-wrap: anywhere;
+}
+
+.phone-live-page .phone-greeting,
+.phone-live-page .phone-match-instruction {
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.phone-live-page .phone-greeting {
+  display: grid;
+  gap: 4px;
+}
+
+.phone-greeting strong {
+  font-weight: 700;
+}
+
+.phone-live-page .phone-icebreaker p:last-child {
+  font-size: 18px;
+  line-height: 1.35;
 }
 
 .phone-live-page .phone-assignment h1,
@@ -2549,12 +2681,48 @@ h3 {
 }
 
 .phone-live-page .phone-countdown {
-  background: #ffffff80;
+  display: grid;
+  justify-content: center;
+  justify-items: center;
+  gap: 10px;
+  background: transparent;
   border: 0;
   width: 100%;
-  margin: 4px 0 0;
-  padding: 16px;
-  border-radius: 8px;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+}
+
+.phone-clock {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.phone-live-page .phone-countdown strong {
+  font-size: 42px;
+  line-height: 1;
+}
+
+.phone-round-dancers .business-people-art {
+  width: 72px;
+  height: 96px;
+  aspect-ratio: auto;
+  margin: 0;
+}
+
+.phone-round-dancers .single-person-art {
+  width: 36px;
+}
+
+.phone-live-page .phone-countdown span {
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.phone-live-page .phone-countdown em {
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .phone-live-page .phone-rejoin {
@@ -2565,6 +2733,7 @@ h3 {
   text-decoration: underline;
   text-underline-offset: 3px;
   font-weight: 500;
+  font-size: 12px;
 }
 
 .phone-live-page .phone-rejoin:focus-visible {
@@ -2572,48 +2741,33 @@ h3 {
   outline-offset: 3px;
 }
 
-.matching-symbol.phone-symbol {
-  width: 128px;
-  height: 144px;
-  margin: 4px auto;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: inherit;
-}
-
-.matching-symbol.phone-symbol svg {
-  width: 108px;
-  height: 108px;
-}
-
 @media (max-height: 700px) and (max-width: 600px) {
   .phone-live-page .phone-assignment {
-    gap: 8px;
+    gap: 16px;
     padding: 4px 0;
   }
 
-  .matching-symbol.phone-symbol {
-    width: 100px;
-    height: 112px;
-    gap: 6px;
-  }
-
-  .matching-symbol.phone-symbol svg {
-    width: 88px;
-    height: 88px;
-  }
-
   .phone-live-page .phone-assignment h1 {
-    font-size: 28px;
-  }
-
-  .phone-live-page .phone-countdown {
-    padding: 12px;
+    font-size: 36px;
   }
 
   .phone-live-page .phone-countdown strong {
     font-size: 36px;
+  }
+
+  .phone-round-dancers .business-people-art {
+    width: 60px;
+    height: 80px;
+  }
+
+  .phone-round-dancers .single-person-art {
+    width: 30px;
+  }
+}
+
+@media (max-height: 600px) and (max-width: 600px) {
+  .phone-live-page .phone-assignment {
+    gap: 8px;
   }
 }
 
@@ -2664,6 +2818,10 @@ h3 {
   .room-setup-toggles {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
+  }
+
+  .room-setup-toggles .toggle-row {
+    justify-content: space-between;
   }
 
   .room-setup-summary .primary-button {

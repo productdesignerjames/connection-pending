@@ -3,6 +3,7 @@ import type {
   ParticipantIdentity,
   Round,
 } from "./domain.js";
+import { SIGNUP_ROLES } from "./domain.js";
 
 export const ROOM_SIGNUP_MS = 3 * 60 * 1000;
 export const MIN_ROOM_PARTICIPANTS = 3;
@@ -80,6 +81,7 @@ export interface RoomParticipant {
   displayName: string;
   nameBase?: string;
   team?: string;
+  role?: string;
   identity?: ParticipantIdentity;
   joinedAt: number;
 }
@@ -129,6 +131,7 @@ export interface PhoneRoomView {
       identity: ParticipantIdentity;
     }[];
     break: boolean;
+    activity?: string;
   } | null;
 }
 
@@ -231,6 +234,7 @@ function phoneView(
               getParticipantAppearance(room.participants.indexOf(person)),
           })),
           break: station.kind === "break",
+          activity: station.activity,
         }
       : null,
   };
@@ -285,12 +289,13 @@ export async function handleRoomRequest(
   if (roomResult instanceof Response) return roomResult;
   const room = roomResult;
 
-  const registerParticipant = (displayName: string, team: string) => {
+  const registerParticipant = (displayName: string, team: string, role: string) => {
     const participant: RoomParticipant = {
       id: crypto.randomUUID().replace(/-/g, ""),
       displayName,
       nameBase: displayName,
       team: team || undefined,
+      role: role || undefined,
       identity: getParticipantAppearance(room.participants.length),
       joinedAt: now,
     };
@@ -341,7 +346,10 @@ export async function handleRoomRequest(
       typeof body.team === "string" ? body.team.trim().replace(/\s+/g, " ") : "";
     if (team.length > 50)
       return json({ error: "Keep the team name under 50 characters." }, 400);
-    const participant = registerParticipant(displayName, team);
+    const role = typeof body.role === "string" ? body.role.trim() : "";
+    if (role && !SIGNUP_ROLES.some((option) => option === role))
+      return json({ error: "Choose a role from the list." }, 400);
+    const participant = registerParticipant(displayName, team, role);
     await store.set(room);
     return json({ participant, room }, 201);
   }
@@ -359,9 +367,12 @@ export async function handleRoomRequest(
         : "";
     if (team.length > 50)
       return json({ error: "Keep your team name under 50 characters." }, 400);
+    const role = typeof body?.role === "string" ? body.role.trim() : "";
+    if (role && !SIGNUP_ROLES.some((option) => option === role))
+      return json({ error: "Choose a role from the list." }, 400);
     if (room.status !== "lobby" || room.signupEndsAt <= now)
       return json({ error: "Sign-up is closed for this session." }, 409);
-    const participant = registerParticipant(enteredName, team);
+    const participant = registerParticipant(enteredName, team, role);
     await store.set(room);
     return json(
       {
@@ -489,8 +500,9 @@ export async function joinRoom(
   code: string,
   displayName: string,
   team = "",
+  role = "",
 ): Promise<{ participant: RoomParticipant }> {
-  return requestRoom({ action: "join", code, displayName, team });
+  return requestRoom({ action: "join", code, displayName, team, role });
 }
 
 export async function addManualRoomParticipant(
@@ -498,6 +510,7 @@ export async function addManualRoomParticipant(
   hostSecret: string,
   displayName: string,
   team = "",
+  role = "",
 ): Promise<SharedRoom> {
   const result = await requestRoom<{ room: SharedRoom }>({
     action: "add-manual",
@@ -505,6 +518,7 @@ export async function addManualRoomParticipant(
     hostSecret,
     displayName,
     team,
+    role,
   });
   return result.room;
 }
