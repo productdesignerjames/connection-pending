@@ -75,21 +75,25 @@ describe("temporary shared room", () => {
       request("POST", "", { action: "create" }), store, 1_000,
     );
     const { code, hostSecret } = await created.json();
-    for (const action of ["join", "add-manual"]) {
-      const response = await handleRoomRequest(request("POST", "", {
-        action, code, hostSecret, displayName: "Alex Roberts",
-        team: "App team", role: "Director of design",
-      }), store, 2_000);
-      expect(response.status).toBe(201);
-      expect((await response.json()).participant).toMatchObject({
-        team: "App team", role: "Director of design",
-      });
+    for (const role of ["UX researcher", "Service designer"]) {
+      for (const action of ["join", "add-manual"]) {
+        const response = await handleRoomRequest(request("POST", "", {
+          action, code, hostSecret, displayName: `${role} Alex`,
+          team: "App team", role,
+        }), store, 2_000);
+        expect(response.status).toBe(201);
+        expect((await response.json()).participant).toMatchObject({
+          team: "App team", role,
+        });
+      }
     }
-    const invalid = await handleRoomRequest(request("POST", "", {
-      action: "join", code, displayName: "Sam Test", role: "Unknown role",
-    }), store, 2_000);
-    expect(invalid.status).toBe(400);
-    expect((await invalid.json()).error).toBe("Choose a role from the list.");
+    for (const role of ["Senior designer", "Unknown role"]) {
+      const invalid = await handleRoomRequest(request("POST", "", {
+        action: "join", code, displayName: "Sam Test", role,
+      }), store, 2_000);
+      expect(invalid.status).toBe(400);
+      expect((await invalid.json()).error).toBe("Choose a role from the list.");
+    }
   });
 
   it("lets the host add participants after phone signup closes", async () => {

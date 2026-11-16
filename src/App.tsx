@@ -613,7 +613,7 @@ function App() {
     setData((current) => ({ ...current, session: active }));
     setScreen("round");
     setAnnounce(
-      "Find your person. The first conversation starts after the travel countdown.",
+      "Check your phone to find who you're meeting. The first conversation starts after the countdown.",
     );
     return active;
   }
@@ -920,7 +920,7 @@ function App() {
     void closeCurrentRoom();
     setData(createDefaultData());
     setPreview([]);
-    setScreen("setup");
+    setScreen("welcome");
     setPanel("session");
     setDialog(null);
     setError("");
@@ -957,7 +957,7 @@ function App() {
             .filter((member) => member.isActive)
             .map((member) => member.id),
     }));
-    setScreen("setup");
+    setScreen("room-setup");
     setDialog(null);
   }
   function addMember(name: string) {
@@ -2054,13 +2054,8 @@ function App() {
           <CompletionScreen
             summary={summary}
             onAgain={() => {
-              const selected = session.attendeeIds.filter(
-                (id) => id !== "organiser-kerry-m",
-              );
-              setData((current) => ({ ...current, attendeeIds: selected }));
-              setScreen("setup");
-              setPanel("session");
-              previewSession(selected);
+              setData((current) => ({ ...current, session: null }));
+              setScreen("room-setup");
             }}
             onChange={finishSession}
             onReset={() => setDialog("reset")}
@@ -2950,13 +2945,17 @@ function PhoneAssignmentScreen({
               : <BusinessPeopleArt pairIndex={view.assignmentRound * 2 + (isFinding ? 0 : 1)} />}
           </div>
           <p className="section-kicker">
-            {isBreak ? "YOUR BREAK" : isFinding ? "FIND YOUR PERSON" : "YOUR CONVERSATION"}
+            {isBreak ? "YOUR BREAK" : isFinding ? "TIME TO MEET" : "YOUR CONVERSATION"}
           </p>
         </div>
         <div className="phone-partner">
           {!isBreak && <p className="phone-greeting">
-            <strong>{view.participant.displayName.split(" ")[0]}</strong>
-            <span>{isFinding ? "find" : "you are meeting"}</span>
+            <strong>
+              {isFinding
+                ? `Hi, ${view.participant.displayName.split(" ")[0]}!`
+                : view.participant.displayName.split(" ")[0]}
+            </strong>
+            <span>{isFinding ? "You're meeting" : "you are meeting"}</span>
           </p>}
           <h1>
             {assignment?.break
@@ -2970,7 +2969,7 @@ function PhoneAssignmentScreen({
               {assignment?.break
                 ? (assignment.activity ?? "Take a breather while others chat.")
                 : isFinding
-                  ? "Find the person named above. Your phones show the same colour."
+                  ? "Look for each other and say hello. Your screens share a colour."
                   : "Enjoy your conversation together."}
             </p>
           )}
@@ -3186,11 +3185,10 @@ function StationCard({
       }}
     >
       <div className="station-content">
-        <ul className="conversation-name-list">
-          {station.participantIds.map((id) => (
-            <li key={id}>{nameOf(members, id)}</li>
-          ))}
-        </ul>
+        <span className="station-kind">Meet {station.number}</span>
+        <p className="station-names">
+          {station.participantIds.map((id) => nameOf(members, id)).join(" & ")}
+        </p>
       </div>
     </article>
   );
@@ -3271,6 +3269,7 @@ function RoundScreen({
     session.timer.phase === "intro" ||
     (session.timer.phase === "paused" &&
       session.timer.previousPhase === "intro");
+  const roundsRemaining = session.rounds.length - round.number;
   return (
     <section
       className={`round-screen${session.displayMode === "focus" ? " focus-mode" : ""}`}
@@ -3278,9 +3277,17 @@ function RoundScreen({
       <div className="round-topline">
         <div>
           <p className="section-kicker">NETWORKING SESSION</p>
-          <h1>
-            Round {round.number} <span>of {session.rounds.length}</span>
-          </h1>
+          <div className="round-title-row">
+            <h1>
+              Round {round.number} of{" "}
+              <span className="round-total">{session.rounds.length}</span>
+            </h1>
+            <p className="round-progress-note">
+              {roundsRemaining === 0
+                ? "Final round"
+                : `${roundsRemaining} ${roundsRemaining === 1 ? "round" : "rounds"} left`}
+            </p>
+          </div>
         </div>
         <div className="round-top-actions">
           <button className="secondary-button compact" onClick={onDisplay}>
@@ -3299,17 +3306,14 @@ function RoundScreen({
       <div className={`round-focus${isFinding ? " finding-phase" : ""}`}>
         <div className="timer-block">
           <div className="session-timer-face">
-            <span>            {isFinding ? "FIND YOUR PERSON" : "CONVERSATION TIME"}</span>
+            <span>
+              {isFinding ? "CONVERSATION STARTS IN" : "CONVERSATION TIME"}
+            </span>
             <strong className={remaining < 30_000 ? "timer-urgent" : ""}>
               {formatClock(remaining)}
             </strong>
-            <small>
-              {paused
-                ? "PAUSED"
-                : isFinding
-                  ? "CONVERSATION STARTS IN"
-                  : "TIME LEFT"}
-            </small>
+            {paused && <small>PAUSED</small>}
+            {!paused && !isFinding && <small>TIME LEFT</small>}
           </div>
           <div className="timer-people" aria-hidden="true">
             <BusinessPeopleArt pairIndex={(round.number - 1) * 2 + (isFinding ? 0 : 1)} />
@@ -3319,22 +3323,17 @@ function RoundScreen({
           <div>
             <span>
               {isFinding
-                ? "FIND YOUR GROUP"
+                ? "TIME TO MEET"
                 : round.question
                   ? `ICEBREAKER · ${round.question.category}`
                   : "YOUR CONVERSATION"}
             </span>
             <h2 className="round-action-heading">
               {isFinding
-                ? "Find your person."
+                ? "Check your phone to find who you're meeting."
                 : (round.question?.prompt ??
                   `Use these ${session.settings.conversationMinutes} minutes to get to know each other.`)}
             </h2>
-            {isFinding && (
-              <p className="panel-subtitle">
-                Find your name below, then meet your partner.
-              </p>
-            )}
           </div>
         </div>
         {isFinding && (
@@ -3364,7 +3363,7 @@ function RoundScreen({
         </div>
       )}
       <div className="station-grid-heading">
-        <h2>Your conversations</h2>
+        <h2>Who's meeting</h2>
         <span>
           {round.stations.filter((station) => station.kind !== "break").length}{" "}
           conversations
@@ -3403,12 +3402,9 @@ function MovementScreen({
       <div className="movement-heading">
         <div>
           <p className="section-kicker">
-            ROUND {session.currentRound + 1} COMPLETE
+            ROUND {session.currentRound + 1} OF {session.rounds.length} COMPLETE
           </p>
-          <h1>Find your next person.</h1>
-          <p className="movement-instruction">
-            Find your name below, then meet the people in your group.
-          </p>
+          <h1>Say hello to your next partner.</h1>
         </div>
         <div className="movement-timer">
           <div className="session-timer-face">
@@ -3432,10 +3428,10 @@ function MovementScreen({
       </div>
       <div className="next-conversations-heading">
         <span>
-          ROUND {session.currentRound + 2} OF {session.rounds.length}
+          NEXT ROUND · {session.currentRound + 2} OF {session.rounds.length}
         </span>
         <button className="primary-button compact" onClick={onNext}>
-          Start round now
+          Go to timer
         </button>
       </div>
       <div className="next-conversations-list">

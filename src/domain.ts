@@ -137,8 +137,9 @@ export const SIGNUP_TEAMS = [
 ] as const;
 export const SIGNUP_ROLES = [
   "Product designer",
+  "UX researcher",
+  "Service designer",
   "Lead designer",
-  "Senior designer",
   "Director of design",
 ] as const;
 export const ORGANISER_NAME = "Kerry M";

@@ -211,7 +211,7 @@ describe("team-aware meetup rounds", () => {
           : index <= 4
             ? "Lead designer"
             : index % 3 === 0
-              ? "Senior designer"
+              ? "UX researcher"
               : "Product designer",
       }));
       let state = seed;
@@ -321,7 +321,7 @@ describe("team-aware meetup rounds", () => {
     const people = [
       { id: "director", team: "A", role: "Director of design" },
       { id: "lead", team: "B", role: "Lead designer" },
-      { id: "senior", team: "C", role: "Senior designer" },
+      { id: "researcher", team: "C", role: "UX researcher" },
       { id: "designer", team: "D", role: "Product designer" },
       { id: "other-lead", team: "E", role: "Lead designer" },
     ];

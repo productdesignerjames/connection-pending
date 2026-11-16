@@ -29,7 +29,7 @@ describe("connected room clients over HTTP", () => {
     await server?.close();
   });
 
-  it.each([23, 27, 36, 100])("keeps %i clients aligned through eight rounds with icebreakers, pause/resume, and completion", async (participantCount) => {
+  it.each([23, 27, 36, 37, 100])("keeps %i clients aligned through eight rounds with icebreakers, pause/resume, and completion", async (participantCount) => {
     let inFlight = 0;
     let peakInFlight = 0;
     let requests = 0;
@@ -74,7 +74,7 @@ describe("connected room clients over HTTP", () => {
               : index <= 4
                 ? "Lead designer"
                 : index % 3 === 0
-                  ? "Senior designer"
+                  ? "UX researcher"
                   : "Product designer",
           }),
         ),

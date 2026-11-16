@@ -709,14 +709,8 @@ h3 {
 .simple-transition-screen .movement-heading h1 {
   margin: 6px 0 0;
   font-size: clamp(36px, 4vw, 56px);
+  font-weight: 800;
   line-height: 1.08;
-}
-
-.movement-instruction {
-  margin: 12px 0 0;
-  color: var(--clean-muted);
-  font-size: 16px;
-  line-height: 1.5;
 }
 
 .simple-transition-screen .movement-timer {
@@ -731,7 +725,7 @@ h3 {
 
 .simple-transition-screen .movement-timer span,
 .simple-transition-screen .movement-timer small {
-  color: #f3e7f6;
+  color: var(--clean-muted);
   font:
     700 11px/1.3 "Avenir Next",
     Avenir,
@@ -740,7 +734,7 @@ h3 {
 
 .simple-transition-screen .movement-timer strong {
   margin: 4px 0;
-  color: var(--clean-lime);
+  color: var(--clean-coral);
   font:
     600 44px/1 var(--mono);
   font-variant-numeric: tabular-nums;
@@ -762,7 +756,7 @@ h3 {
 .next-conversations-heading > span {
   color: var(--clean-muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .next-conversations-heading .primary-button {
@@ -818,24 +812,24 @@ h3 {
 }
 
 .session-timer-face {
-  width: 168px;
-  min-height: 168px;
-  flex: 0 0 168px;
+  width: auto;
+  min-height: 0;
+  flex: 0 0 auto;
   display: grid;
   align-content: center;
-  justify-items: center;
+  justify-items: start;
   gap: 5px;
-  padding: 18px;
-  border: 3px solid var(--clean-ink);
-  border-radius: 50%;
-  background: #302e30;
-  box-shadow: 6px 6px 0 var(--clean-coral);
-  text-align: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
 }
 
 .session-timer-face > span,
 .session-timer-face > small {
-  color: #f3e7f6;
+  color: var(--clean-muted);
   font: 700 11px/1.3 "Avenir Next", Avenir, sans-serif;
 }
 
@@ -994,6 +988,7 @@ h3 {
   margin: 10px 0 16px;
   color: var(--clean-ink);
   font-size: 52px;
+  font-weight: 800;
   line-height: 1.1;
 }
 
@@ -1591,7 +1586,7 @@ h3 {
   margin: 4px 0 0;
   color: var(--clean-ink);
   font:
-    600 20px "Avenir Next",
+    700 20px "Avenir Next",
     Avenir,
     sans-serif;
 }
@@ -1610,10 +1605,11 @@ h3 {
 }
 
 .room-attendee-list {
-  max-height: clamp(96px, 20svh, 200px);
+  max-height: 2450px;
   margin: 0;
   padding: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   list-style: none;
 }
 
@@ -1896,7 +1892,7 @@ h3 {
 .phone-waiting h2 {
   margin: 0 0 7px;
   font:
-    600 18px "Avenir Next",
+    700 18px "Avenir Next",
     Avenir,
     sans-serif;
 }
@@ -2132,7 +2128,7 @@ h3 {
   margin: 4px 0 0;
   color: var(--clean-ink);
   font:
-    600 20px "Avenir Next",
+    700 20px "Avenir Next",
     Avenir,
     sans-serif;
 }
@@ -2466,6 +2462,7 @@ h3 {
   min-width: 0;
   min-height: 42px;
   padding: 0 42px 0 12px;
+  -webkit-appearance: none;
   appearance: none;
   border: 2px solid var(--clean-ink);
   border-radius: 10px;
@@ -2827,15 +2824,36 @@ h3 {
 }
 
 .station-card.conversation-card.break-card {
-  background: var(--clean-sand);
+  background: var(--clean-peach);
   color: var(--clean-ink);
-  border-style: dashed;
+  border: 2px dashed var(--clean-coral);
 }
 
 .conversation-card.break-card .station-kind {
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--clean-coral);
+  color: var(--clean-white);
+  font: 800 12px/1.3 var(--clean-display);
+  letter-spacing: 0.6px;
+}
+
+.conversation-card:not(.break-card) .station-kind {
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #2e6a4f;
+  color: var(--clean-white);
+  font: 700 11px/1.3 var(--clean-display);
+  letter-spacing: 0.5px;
+}
+
+.conversation-card .station-names {
+  margin: 0;
   color: inherit;
-  font: 800 16px/1.3 var(--clean-display);
-  letter-spacing: 0.8px;
+  font: 700 18px/1.35 var(--clean-display);
+  overflow-wrap: anywhere;
 }
 
 .conversation-card .conversation-name-list {
@@ -2858,7 +2876,29 @@ h3 {
 }
 
 .round-screen .round-topline h1 span {
-  font-size: 16px;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.round-screen .round-topline h1 .round-total {
+  color: var(--clean-coral);
+}
+
+.round-screen .round-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.round-screen .round-progress-note {
+  margin: 4px 0 0;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: #2e6a4f;
+  color: var(--clean-white);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .round-screen .round-top-actions .secondary-button {
@@ -2903,8 +2943,8 @@ h3 {
 .round-screen.focus-mode .round-focus {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 20px;
-  padding: 16px 20px;
+  gap: clamp(24px, 2.4vw, 40px);
+  padding: clamp(20px, 2vw, 32px);
   border: 2px solid var(--clean-ink);
   border-radius: 20px;
   background: var(--clean-white);
@@ -2961,21 +3001,25 @@ h3 {
 .round-screen .icebreaker-block {
   min-width: 0;
   min-height: 0;
-  align-items: center;
+  align-items: stretch;
   gap: 12px;
   padding: 0;
   border-left: 0;
 }
 
+.round-screen .icebreaker-block > div {
+  width: 100%;
+}
+
 .round-screen .icebreaker-block span {
   color: var(--clean-green);
-  font: 700 10px/1.4 var(--clean-display);
+  font: 700 12px/1.4 var(--clean-display);
   letter-spacing: 0.6px;
 }
 
 .round-screen .icebreaker-block h2 {
   margin: 6px 0 0;
-  font: 800 24px/1.2 var(--clean-display);
+  font: 800 clamp(28px, 2.3vw, 40px)/1.2 var(--clean-display);
 }
 
 .round-screen .icebreaker-block .panel-subtitle {
@@ -3020,6 +3064,7 @@ h3 {
 }
 
 .round-screen .station-grid .station-card.break-card {
+  border-color: var(--clean-coral);
   border-style: dashed;
 }
 
@@ -3029,12 +3074,20 @@ h3 {
   line-height: 1.3;
 }
 
+.round-screen .station-grid .station-names {
+  font-size: 20px;
+}
+
 .round-screen.focus-mode .station-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
 }
 
 .round-screen.focus-mode .station-grid .conversation-name-list li {
   font-size: 26px;
+}
+
+.round-screen.focus-mode .station-grid .station-names {
+  font-size: 23px;
 }
 
 @media (max-width: 760px) {
@@ -3148,13 +3201,13 @@ h3 {
   height: 48px;
 }
 
-.app-shell:has(.phone-live-page) .app-main {
+.app-shell:has(.phone-page) .app-main {
   width: 100%;
   max-width: none;
   padding: 0;
 }
 
-.app-shell:has(.phone-live-page) .app-footer {
+.app-shell:has(.phone-page) .app-footer {
   display: none;
 }
 
@@ -3363,6 +3416,46 @@ h3 {
 
   .phone-round-dancers .single-person-art {
     width: 30px;
+  }
+
+  .phone-page:not(.phone-live-page) {
+    padding: 8px 16px 0;
+  }
+
+  .phone-join-content {
+    padding: 10px 0;
+  }
+
+  .phone-join-content h1 {
+    font-size: 30px;
+  }
+
+  .phone-join-content > p:not(.section-kicker) {
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .phone-join-content form {
+    gap: 6px;
+    margin-top: 16px;
+  }
+
+  .phone-join-content label {
+    font-size: 12px;
+  }
+
+  .phone-join-content input,
+  .phone-join-content select {
+    height: 44px;
+  }
+
+  .phone-join-content .primary-button {
+    min-height: 44px;
+    margin-top: 2px;
+  }
+
+  .phone-footnote {
+    font-size: 10px;
   }
 }
 
